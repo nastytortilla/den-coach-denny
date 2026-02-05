@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import DenShell from "../components/DenShell";
-import { upload } from "@vercel/blob/client";
 
 export default function ScorePage() {
   const [file, setFile] = useState<File | null>(null);
@@ -18,60 +17,54 @@ export default function ScorePage() {
     }
 
     setLoading(true);
+    setStatus("");
+    setTranscript("");
+    setFeedback("");
+
     try {
-      setStatus("Uploading...");
-      setTranscript("");
-      setFeedback("");
-
-      // 1) Upload large audio directly to Vercel Blob (bypasses Vercel body size limits)
-      let blob;
-      try {
-        blob = await upload(file.name, file, {
-          access: "public",
-          handleUploadUrl: "/api/blob/upload",
-          multipart: true, // IMPORTANT for larger files
-        });
-      } catch (err: any) {
-        setStatus("Upload failed: " + (err?.message || String(err)));
-        return;
-      }
-
-      // 2) Call your scoring API with ONLY the blob URL (not the raw file)
-      setStatus("Scoring call...");
-      let res: Response;
-      try {
-        res = await fetch("/api/score-call", {
+      // 1) Upload raw file bytes to your Blob upload route
+      setStatus("Uploading audio...");
+      const uploadRes = await fetch(
+        `/api/blob/upload?filename=${encodeURIComponent(file.name)}`,
+        {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            blobUrl: blob.url,
-            originalName: file.name,
-            mimeType: file.type,
-          }),
-        });
-      } catch {
-        setStatus("Network error: could not reach the server.");
+          body: file,
+          headers: { "content-type": file.type || "application/octet-stream" },
+        }
+      );
+
+      const uploadData = await uploadRes.json().catch(() => null);
+      if (!uploadRes.ok) {
+        setStatus("Upload failed: " + (uploadData?.error || `HTTP ${uploadRes.status}`));
         return;
       }
 
-      const contentType = res.headers.get("content-type") || "";
-      const data = contentType.includes("application/json")
-        ? await res.json()
-        : await res.text();
-
-      if (!res.ok) {
-        const msg =
-          typeof data === "string"
-            ? data
-            : (data as any)?.error ||
-              (data as any)?.details ||
-              `HTTP ${res.status}`;
-        setStatus("Error: " + msg);
+      const blobUrl = uploadData?.url as string | undefined;
+      if (!blobUrl) {
+        setStatus("Upload failed: no blob URL returned.");
         return;
       }
 
-      setTranscript((data as any)?.transcript ?? "");
-      setFeedback((data as any)?.feedback ?? "");
+      // 2) Score using ONLY the blobUrl (no big payload)
+      setStatus("Transcribing + scoring...");
+      const scoreRes = await fetch("/api/score-call", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          blobUrl,
+          callType: "Unknown",
+          goal: "Unknown",
+        }),
+      });
+
+      const scoreData = await scoreRes.json().catch(() => null);
+      if (!scoreRes.ok) {
+        setStatus("Score failed: " + (scoreData?.error || `HTTP ${scoreRes.status}`));
+        return;
+      }
+
+      setTranscript(scoreData?.transcript ?? "");
+      setFeedback(scoreData?.feedback ?? "");
       setStatus("Done!");
     } finally {
       setLoading(false);
@@ -83,7 +76,6 @@ export default function ScorePage() {
       title="Let Coach Denny Listen"
       subtitle="Upload a call and get transcript + coaching feedback"
     >
-      {/* Hidden real file input */}
       <input
         id="audioFile"
         type="file"
@@ -92,15 +84,7 @@ export default function ScorePage() {
         onChange={(e) => setFile(e.target.files?.[0] ?? null)}
       />
 
-      {/* Styled “link button” label */}
-      <div
-        style={{
-          display: "flex",
-          gap: 10,
-          alignItems: "center",
-          flexWrap: "wrap",
-        }}
-      >
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <label htmlFor="audioFile" className="den-link" style={{ cursor: "pointer" }}>
           Choose audio file
         </label>
@@ -122,7 +106,7 @@ export default function ScorePage() {
             opacity: loading ? 0.7 : 1,
           }}
         >
-          {loading ? "Uploading..." : "Upload + Get Feedback"}
+          {loading ? "Working..." : "Upload + Get Feedback"}
         </button>
       </div>
 
