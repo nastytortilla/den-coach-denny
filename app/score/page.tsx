@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import DenShell from "../components/DenShell";
+import { upload } from "@vercel/blob/client";
 
 export default function ScorePage() {
   const [file, setFile] = useState<File | null>(null);
@@ -22,14 +23,31 @@ export default function ScorePage() {
       setTranscript("");
       setFeedback("");
 
-      const form = new FormData();
-      form.append("file", file);
+      // 1) Upload large audio directly to Vercel Blob (bypasses Vercel body size limits)
+      let blob;
+      try {
+        blob = await upload(file.name, file, {
+          access: "public",
+          handleUploadUrl: "/api/blob/upload",
+          multipart: true, // IMPORTANT for larger files
+        });
+      } catch (err: any) {
+        setStatus("Upload failed: " + (err?.message || String(err)));
+        return;
+      }
 
+      // 2) Call your scoring API with ONLY the blob URL (not the raw file)
+      setStatus("Scoring call...");
       let res: Response;
       try {
         res = await fetch("/api/score-call", {
           method: "POST",
-          body: form,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            blobUrl: blob.url,
+            originalName: file.name,
+            mimeType: file.type,
+          }),
         });
       } catch {
         setStatus("Network error: could not reach the server.");
@@ -45,7 +63,9 @@ export default function ScorePage() {
         const msg =
           typeof data === "string"
             ? data
-            : data?.error || data?.details || `HTTP ${res.status}`;
+            : (data as any)?.error ||
+              (data as any)?.details ||
+              `HTTP ${res.status}`;
         setStatus("Error: " + msg);
         return;
       }
@@ -73,7 +93,14 @@ export default function ScorePage() {
       />
 
       {/* Styled “link button” label */}
-      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 10,
+          alignItems: "center",
+          flexWrap: "wrap",
+        }}
+      >
         <label htmlFor="audioFile" className="den-link" style={{ cursor: "pointer" }}>
           Choose audio file
         </label>

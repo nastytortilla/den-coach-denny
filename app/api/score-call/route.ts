@@ -15,48 +15,79 @@ function pickExtFromMime(mime?: string) {
   return "mp3";
 }
 
+function safeName(name: string) {
+  // Keep it simple: strip weird path chars
+  return name.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").slice(0, 120);
+}
+
 export async function POST(req: Request) {
   try {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
-        { error: "Missing OPENAI_API_KEY in .env.local" },
+        { error: "Missing OPENAI_API_KEY in environment variables." },
         { status: 500 }
       );
     }
 
-    // Read form fields
-    const formData = await req.formData();
-
-    const file = formData.get("file");
-    const callType = formData.get("callType");
-    const goal = formData.get("goal");
-
-    const callTypeText =
-      typeof callType === "string" && callType.trim() ? callType.trim() : "Unknown";
-
-    const goalText =
-      typeof goal === "string" && goal.trim() ? goal.trim() : "Unknown";
-
-    if (!file || !(file instanceof Blob)) {
+    // ✅ NEW: expect JSON, not FormData
+    let body: any = null;
+    try {
+      body = await req.json();
+    } catch {
       return NextResponse.json(
-        { error: "No audio file received. Field name must be 'file'." },
+        { error: "Invalid JSON body. Expected { blobUrl, callType?, goal?, originalName?, mimeType? }" },
         { status: 400 }
       );
     }
 
-    // Build a filename OpenAI likes
-    const anyFile = file as any;
-    const mime = (file as any)?.type as string | undefined;
+    const blobUrl = typeof body?.blobUrl === "string" ? body.blobUrl.trim() : "";
+    const callTypeText =
+      typeof body?.callType === "string" && body.callType.trim() ? body.callType.trim() : "Unknown";
+    const goalText =
+      typeof body?.goal === "string" && body.goal.trim() ? body.goal.trim() : "Unknown";
+
+    if (!blobUrl) {
+      return NextResponse.json(
+        { error: "Missing blobUrl. Your client must upload to Blob first, then send { blobUrl } here." },
+        { status: 400 }
+      );
+    }
+
+    // Download the file from Vercel Blob URL
+    let audioRes: Response;
+    try {
+      audioRes = await fetch(blobUrl);
+    } catch (e: any) {
+      return NextResponse.json(
+        { error: "Could not fetch blobUrl.", details: e?.message || String(e) },
+        { status: 400 }
+      );
+    }
+
+    if (!audioRes.ok) {
+      return NextResponse.json(
+        { error: "Blob fetch failed.", details: `HTTP ${audioRes.status}` },
+        { status: 400 }
+      );
+    }
+
+    const mimeFromResponse = audioRes.headers.get("content-type") || undefined;
+    const mimeFromClient = typeof body?.mimeType === "string" ? body.mimeType : undefined;
+    const mime = mimeFromClient || mimeFromResponse;
+
     const ext = pickExtFromMime(mime);
 
-    const originalName =
-      typeof anyFile?.name === "string" && anyFile.name.length > 0
-        ? anyFile.name
-        : `call-audio.${ext}`;
+    const originalNameFromClient =
+      typeof body?.originalName === "string" && body.originalName.trim()
+        ? body.originalName.trim()
+        : "";
 
-    const bytes = Buffer.from(await file.arrayBuffer());
-    const uploadedFile = await toFile(bytes, originalName);
+    const fallbackName = `call-audio.${ext}`;
+    const fileName = safeName(originalNameFromClient || fallbackName);
+
+    const bytes = Buffer.from(await audioRes.arrayBuffer());
+    const uploadedFile = await toFile(bytes, fileName);
 
     const openai = new OpenAI({ apiKey });
 
@@ -74,7 +105,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 2) Coach (use shared prompt + include dropdown context)
+    // 2) Coach (shared prompt + dropdown context)
     const coaching = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       temperature: 0.4,
