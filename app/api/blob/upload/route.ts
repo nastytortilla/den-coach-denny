@@ -1,51 +1,29 @@
-import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
-import { NextResponse } from 'next/server';
+import { NextResponse } from "next/server";
+import { put } from "@vercel/blob";
 
-export async function POST(request: Request) {
-  const body = (await request.json()) as HandleUploadBody;
+export const runtime = "nodejs";
 
+export async function POST(req: Request) {
   try {
-    const jsonResponse = await handleUpload({
-      request,
-      body,
+    const { searchParams } = new URL(req.url);
+    const filename = searchParams.get("filename") || "audio.mp3";
 
-      // IMPORTANT: this is where you can restrict uploads
-      onBeforeGenerateToken: async (pathname, clientPayload, multipart) => {
-        // If you want to lock this down later, this is where auth checks go.
-        // For now, keep it simple.
+    // Browser sends the raw file bytes to this route
+    const blob = await req.blob();
 
-        return {
-          // Allow common audio types
-          allowedContentTypes: [
-            'audio/mpeg',
-            'audio/mp3',
-            'audio/wav',
-            'audio/x-wav',
-            'audio/mp4',
-            'audio/m4a',
-            'audio/webm',
-            'audio/ogg',
-          ],
-
-          // Optional: cap size (example: 200MB)
-          maximumSizeInBytes: 200 * 1024 * 1024,
-
-          // Optional: avoid overwriting files with same name
-          addRandomSuffix: true,
-        };
-      },
-
-      onUploadCompleted: async ({ blob }) => {
-        // You can log/store blob.url if you want
-        console.log('Upload completed:', blob.url);
-      },
+    // Upload to Vercel Blob
+    const uploaded = await put(filename, blob, {
+      access: "public", // easiest
+      addRandomSuffix: true,
     });
 
-    return NextResponse.json(jsonResponse);
-  } catch (error: any) {
+    return NextResponse.json({
+      url: uploaded.url,
+    });
+  } catch (err: any) {
     return NextResponse.json(
-      { error: error?.message || 'Upload failed' },
-      { status: 400 }
+      { error: "blob upload failed", details: err?.message || String(err) },
+      { status: 500 }
     );
   }
 }
