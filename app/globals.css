@@ -1,0 +1,262 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+/* Make normal links look like links */
+a {
+  text-decoration: underline;
+}
+
+/* Make buttons/labels look like links */
+.linklike {
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Button-specific cleanup so it doesn't look like a button */
+button.linklike {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+}
+
+/* Disabled state */
+button.linklike:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+:root {
+  /* Den Defenders brand palette (pulled from your logo) */
+  --dd-navy: #002848;
+  --dd-navy-2: #001838;
+  --dd-teal: #10a898;
+  --dd-red: #e83028;
+  --dd-gold: #fcbc54;
+  --dd-white: #ffffff;
+
+  /* Easy knobs */
+  --dd-watermark-opacity: 0.12; /* raise to 0.20 if you want Denny more visible */
+  --dd-watermark-size: 460px;   /* bigger/smaller mascot */
+  --dd-card-max: 980px;         /* overall content width */
+  --dd-card-pad: 24px;
+
+  --dd-text: #0b1220;
+  --dd-muted: #51607c;
+  --dd-border: rgba(16, 168, 152, 0.35);
+  --dd-shadow: 0 16px 60px rgba(0, 0, 0, 0.35);
+  --dd-radius: 22px;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  color: var(--dd-text);
+}
+
+/* ===== Background shell ===== */
+.den-bg {
+  position: relative;
+  min-height: 100vh;
+  padding: 28px 18px 70px;
+
+  /* Brand-y background with teal/gold/red glow */
+  background:
+    radial-gradient(950px 600px at 18% 10%, rgba(16, 168, 152, 0.22), transparent 60%),
+    radial-gradient(900px 520px at 88% 22%, rgba(252, 188, 84, 0.18), transparent 55%),
+    radial-gradient(820px 520px at 60% 100%, rgba(232, 48, 40, 0.14), transparent 60%),
+    linear-gradient(180deg, var(--dd-navy), var(--dd-navy-2));
+  overflow: hidden;
+}
+
+/* Subtle diagonal pattern overlay */
+.den-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.08) 0px,
+    rgba(255, 255, 255, 0.08) 1px,
+    transparent 1px,
+    transparent 14px
+  );
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+/* Coach Denny watermark */
+.den-watermark {
+  position: fixed;
+  left: -40px;
+  bottom: -45px;
+  width: var(--dd-watermark-size);
+  height: auto;
+  opacity: var(--dd-watermark-opacity);
+  filter: drop-shadow(0 22px 40px rgba(0, 0, 0, 0.45));
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+}
+
+/* Main card */
+.den-card {
+  position: relative;
+  z-index: 1;
+  max-width: var(--dd-card-max);
+  margin: 0 auto;
+  padding: calc(var(--dd-card-pad) + 10px) var(--dd-card-pad) var(--dd-card-pad);
+  border-radius: var(--dd-radius);
+  border: 1px solid var(--dd-border);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--dd-shadow);
+}
+
+/* Top accent stripe */
+.den-card::before {
+  content: "";
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  top: 14px;
+  height: 7px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--dd-teal), var(--dd-gold), var(--dd-red));
+}
+
+/* Header layout */
+.den-header {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  margin-bottom: 18px;
+}
+
+.den-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.den-logo {
+  height: 44px;
+  width: auto;
+}
+
+.den-avatar {
+  height: 44px;
+  width: 44px;
+  border-radius: 14px;
+  border: 2px solid rgba(0,0,0,0.15);
+  background: rgba(255,255,255,0.75);
+}
+
+.den-title {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 0.2px;
+  margin: 0;
+}
+
+.den-subtitle {
+  font-size: 13px;
+  color: var(--dd-muted);
+  margin-top: 2px;
+}
+
+/* Nav links (still “links”, but premium) */
+.den-nav {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.den-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(16, 168, 152, 0.45);
+  background: rgba(16, 168, 152, 0.10);
+  color: var(--dd-navy);
+  font-weight: 800;
+  text-decoration: underline;
+  text-decoration-color: rgba(16, 168, 152, 0.9);
+  text-underline-offset: 4px;
+}
+
+.den-link:hover {
+  transform: translateY(-1px);
+  background: rgba(16, 168, 152, 0.14);
+}
+
+/* Content spacing */
+.den-main > * + * {
+  margin-top: 14px;
+}
+
+/* Your “black square” typing box */
+.den-textarea {
+  width: 100%;
+  min-height: 130px;
+  padding: 12px 12px;
+  font-size: 16px;
+  border: 3px solid #000; /* keep the strong black box */
+  border-radius: 14px;
+  outline: none;
+}
+
+.den-textarea:focus {
+  box-shadow: 0 0 0 5px rgba(16, 168, 152, 0.22);
+}
+
+/* Small coach badge (optional but fits the “coach look”) */
+.den-coach-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(232, 48, 40, 0.35);
+  background: rgba(232, 48, 40, 0.08);
+  font-weight: 900;
+  color: var(--dd-navy);
+}
+
+.den-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--dd-red);
+}
