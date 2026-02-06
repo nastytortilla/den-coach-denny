@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { upload } from "@vercel/blob/client";
 import DenShell from "../components/DenShell";
 
 export default function ScorePage() {
@@ -22,30 +23,21 @@ export default function ScorePage() {
     setFeedback("");
 
     try {
-      // 1) Upload raw file bytes to your Blob upload route
+      // 1) DIRECT upload from browser -> Vercel Blob
+      // (This avoids HTTP 413 because the big file does NOT go through your server function.)
       setStatus("Uploading audio...");
-      const uploadRes = await fetch(
-        `/api/blob/upload?filename=${encodeURIComponent(file.name)}`,
-        {
-          method: "POST",
-          body: file,
-          headers: { "content-type": file.type || "application/octet-stream" },
-        }
-      );
+      const blob = await upload(file.name, file, {
+        access: "public", // easiest; "private" is doable but requires signed reads
+        handleUploadUrl: "/api/blob/upload",
+      });
 
-      const uploadData = await uploadRes.json().catch(() => null);
-      if (!uploadRes.ok) {
-        setStatus("Upload failed: " + (uploadData?.error || `HTTP ${uploadRes.status}`));
-        return;
-      }
-
-      const blobUrl = uploadData?.url as string | undefined;
+      const blobUrl = blob?.url;
       if (!blobUrl) {
         setStatus("Upload failed: no blob URL returned.");
         return;
       }
 
-      // 2) Score using ONLY the blobUrl (no big payload)
+      // 2) Score using ONLY the blobUrl (tiny payload)
       setStatus("Transcribing + scoring...");
       const scoreRes = await fetch("/api/score-call", {
         method: "POST",
@@ -59,13 +51,17 @@ export default function ScorePage() {
 
       const scoreData = await scoreRes.json().catch(() => null);
       if (!scoreRes.ok) {
-        setStatus("Score failed: " + (scoreData?.error || `HTTP ${scoreRes.status}`));
+        setStatus(
+          "Score failed: " + (scoreData?.error || `HTTP ${scoreRes.status}`)
+        );
         return;
       }
 
       setTranscript(scoreData?.transcript ?? "");
       setFeedback(scoreData?.feedback ?? "");
       setStatus("Done!");
+    } catch (err: any) {
+      setStatus("Error: " + (err?.message || String(err)));
     } finally {
       setLoading(false);
     }
