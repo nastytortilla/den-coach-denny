@@ -28,6 +28,8 @@ Company facts (use these in advice):
   Inquiry → Qualification → Book Consult → Show Samples → Measure → Exact Quote → Order → Install.
 - Doors are custom-fit and professionally installed to eliminate pry points and weak frames.
 - Lifetime break-in replacement + workmanship warranty are core trust drivers.
+- Centurion, Artisan and Clearbreeze security doors: typically $3,500–$5,000 installed.
+- Sliding security doors: typically $4,000–$5,000 installed.
 
 Security product catalog (approved positioning):
 
@@ -70,8 +72,6 @@ Security Window Screens
   - Must be clearly explained for safety compliance.
 
 Internal pricing guidance (do NOT present as public data):
-- Hinged security doors: typically $3,700–$5,000 installed.
-- Sliding security doors: typically $4,000–$5,000 installed.
 - Pricing includes: custom build, professional install, taxes, warranties.
 - Never lead with price. Lead with fit and value.
 
