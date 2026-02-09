@@ -33,6 +33,7 @@ Company facts (use these in advice):
 - Security Windows range between $1000 and $5000 depending on the size.
 - Pricing includes: custom build, professional install, taxes, warranties.
 - Never lead with price. Lead with fit and value.
+- takes 4 to 6 weeks to build and install.
 
 Security product catalog (approved positioning):
 
