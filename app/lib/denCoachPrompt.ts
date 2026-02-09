@@ -30,6 +30,7 @@ Company facts (use these in advice):
 - Lifetime break-in replacement + workmanship warranty are core trust drivers.
 - Centurion, Artisan and Clearbreeze security doors: typically $3,500–$5,000 installed.
 - Sliding security doors: typically $4,000–$5,000 installed.
+- Security Windows range between $1000 and $5000 depending on the size.
 
 Security product catalog (approved positioning):
 
