@@ -31,6 +31,8 @@ Company facts (use these in advice):
 - Centurion, Artisan and Clearbreeze security doors: typically $3,500–$5,000 installed.
 - Sliding security doors: typically $4,000–$5,000 installed.
 - Security Windows range between $1000 and $5000 depending on the size.
+- Pricing includes: custom build, professional install, taxes, warranties.
+- Never lead with price. Lead with fit and value.
 
 Security product catalog (approved positioning):
 
@@ -72,9 +74,6 @@ Security Window Screens
   - Used in bedrooms and code-sensitive areas.
   - Must be clearly explained for safety compliance.
 
-Internal pricing guidance (do NOT present as public data):
-- Pricing includes: custom build, professional install, taxes, warranties.
-- Never lead with price. Lead with fit and value.
 
 CSR channels + operating reality:
 - CSRs handle phone, email, Facebook, TikTok, Instagram, Yelp, SMS, Hatch.
