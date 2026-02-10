@@ -11,6 +11,12 @@ export default function ScorePage() {
   const [feedback, setFeedback] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // NEW: post-score Q&A
+  const [csrQuestion, setCsrQuestion] = useState("");
+  const [followupStatus, setFollowupStatus] = useState("");
+  const [followupAnswer, setFollowupAnswer] = useState("");
+  const [followupLoading, setFollowupLoading] = useState(false);
+
   async function uploadAndScore() {
     if (!file) {
       setStatus("Pick an audio file first.");
@@ -22,12 +28,16 @@ export default function ScorePage() {
     setTranscript("");
     setFeedback("");
 
+    // reset follow-up state whenever a new scoring run starts
+    setCsrQuestion("");
+    setFollowupStatus("");
+    setFollowupAnswer("");
+
     try {
       // 1) DIRECT upload from browser -> Vercel Blob
-      // (This avoids HTTP 413 because the big file does NOT go through your server function.)
       setStatus("Uploading audio...");
       const blob = await upload(file.name, file, {
-        access: "public", // easiest; "private" is doable but requires signed reads
+        access: "public",
         handleUploadUrl: "/api/blob/upload",
       });
 
@@ -43,6 +53,7 @@ export default function ScorePage() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          mode: "score",
           blobUrl,
           callType: "Unknown",
           goal: "Unknown",
@@ -64,6 +75,53 @@ export default function ScorePage() {
       setStatus("Error: " + (err?.message || String(err)));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function askFollowup() {
+    if (!transcript || !feedback) {
+      setFollowupStatus("Run a score first so I have context.");
+      return;
+    }
+    if (!csrQuestion.trim()) {
+      setFollowupStatus("Type a question first.");
+      return;
+    }
+
+    setFollowupLoading(true);
+    setFollowupStatus("");
+    setFollowupAnswer("");
+
+    try {
+      setFollowupStatus("Sending question to Den Coach...");
+
+      // This assumes your /api/score-call supports mode="followup"
+      // and returns { answer: string }.
+      const res = await fetch("/api/score-call", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          mode: "followup",
+          csrQuestion: csrQuestion.trim(),
+          transcript,
+          scoreOutput: feedback,
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setFollowupStatus(
+          "Follow-up failed: " + (data?.error || `HTTP ${res.status}`)
+        );
+        return;
+      }
+
+      setFollowupAnswer(data?.answer ?? "");
+      setFollowupStatus("Done!");
+    } catch (err: any) {
+      setFollowupStatus("Error: " + (err?.message || String(err)));
+    } finally {
+      setFollowupLoading(false);
     }
   }
 
@@ -119,6 +177,51 @@ export default function ScorePage() {
         <>
           <h3 style={{ marginTop: 18 }}>Coaching Feedback</h3>
           <pre style={{ whiteSpace: "pre-wrap" }}>{feedback}</pre>
+
+          {/* NEW: Post-score Q&A */}
+          <h3 style={{ marginTop: 18 }}>Ask Den Coach About This Call</h3>
+
+          <p style={{ marginTop: 6, opacity: 0.85 }}>
+            Ask a specific question. Den Coach will answer directly and give a stronger script.
+          </p>
+
+          <textarea
+            value={csrQuestion}
+            onChange={(e) => setCsrQuestion(e.target.value)}
+            placeholder="Example: How should I have handled the price moment without losing control?"
+            style={{
+              width: "100%",
+              minHeight: 90,
+              marginTop: 10,
+              padding: 10,
+              border: "1px solid #000",
+              borderRadius: 6,
+              fontSize: 14,
+            }}
+          />
+
+          <div style={{ marginTop: 10 }}>
+            <button
+              disabled={followupLoading}
+              onClick={askFollowup}
+              className="den-link"
+              style={{
+                cursor: followupLoading ? "not-allowed" : "pointer",
+                opacity: followupLoading ? 0.7 : 1,
+              }}
+            >
+              {followupLoading ? "Asking..." : "Ask Den Coach"}
+            </button>
+          </div>
+
+          {followupStatus && <p style={{ marginTop: 10 }}>{followupStatus}</p>}
+
+          {followupAnswer && (
+            <>
+              <h3 style={{ marginTop: 14 }}>Den Coach Answer</h3>
+              <pre style={{ whiteSpace: "pre-wrap" }}>{followupAnswer}</pre>
+            </>
+          )}
         </>
       )}
     </DenShell>

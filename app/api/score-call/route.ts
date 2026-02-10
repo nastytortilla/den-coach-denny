@@ -5,6 +5,10 @@ import { DEN_COACH_SYSTEM_PROMPT } from "@/app/lib/denCoachPrompt";
 
 export const runtime = "nodejs";
 
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
 export async function POST(req: Request) {
   try {
     const apiKey = process.env.OPENAI_API_KEY;
@@ -16,18 +20,70 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json().catch(() => null);
-    const blobUrl = body?.blobUrl as string | undefined;
+    if (!body) {
+      return NextResponse.json(
+        { error: "Invalid JSON body" },
+        { status: 400 }
+      );
+    }
 
-    const callTypeText =
-      typeof body?.callType === "string" && body.callType.trim()
-        ? body.callType.trim()
-        : "Unknown";
+    const mode = body.mode ?? "score";
 
-    const goalText =
-      typeof body?.goal === "string" && body.goal.trim()
-        ? body.goal.trim()
-        : "Unknown";
+    /* ============================
+       FOLLOW-UP MODE (NO RE-SCORE)
+       ============================ */
+    if (mode === "followup") {
+      const { csrQuestion, transcript, scoreOutput } = body;
 
+      if (!csrQuestion || !transcript || !scoreOutput) {
+        return NextResponse.json(
+          {
+            error:
+              "Missing required fields for followup: csrQuestion, transcript, scoreOutput",
+          },
+          { status: 400 }
+        );
+      }
+
+      const followupPrompt = `
+You already scored this call.
+Do NOT re-score unless explicitly asked.
+
+Use the transcript and prior score output as context.
+Answer the CSR's question directly.
+Tie your answer to booking rate, control, and show-rate.
+Provide a short word-for-word script correction.
+
+CSR Question:
+${csrQuestion}
+
+Transcript:
+${transcript}
+
+Prior Score Output:
+${scoreOutput}
+`.trim();
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        temperature: 0.2,
+        messages: [
+          { role: "system", content: DEN_COACH_SYSTEM_PROMPT },
+          { role: "user", content: followupPrompt },
+        ],
+      });
+
+      const answer =
+        completion.choices[0]?.message?.content?.trim() || "";
+
+      return NextResponse.json({ answer });
+    }
+
+    /* ============================
+       SCORE MODE (TRANSCRIBE + COACH)
+       ============================ */
+
+    const blobUrl = typeof body.blobUrl === "string" ? body.blobUrl : undefined;
     if (!blobUrl) {
       return NextResponse.json(
         { error: "Missing blobUrl" },
@@ -35,70 +91,80 @@ export async function POST(req: Request) {
       );
     }
 
-    // Download the file from Blob (server-side)
-    const fileRes = await fetch(blobUrl);
-    if (!fileRes.ok) {
+    const callTypeText =
+      typeof body.callType === "string" && body.callType.trim()
+        ? body.callType.trim()
+        : "Unknown";
+
+    const goalText =
+      typeof body.goal === "string" && body.goal.trim()
+        ? body.goal.trim()
+        : "Unknown";
+
+    // Download audio from Blob
+    const audioRes = await fetch(blobUrl);
+    if (!audioRes.ok) {
       return NextResponse.json(
-        { error: "Failed to fetch blobUrl", details: `HTTP ${fileRes.status}` },
-        { status: 400 }
-      );
-    }
-
-    const contentType = fileRes.headers.get("content-type") || "audio/mpeg";
-    const ext =
-      contentType.includes("wav") ? "wav" :
-      contentType.includes("mp4") || contentType.includes("m4a") ? "m4a" :
-      contentType.includes("ogg") ? "ogg" :
-      "mp3";
-
-    const bytes = Buffer.from(await fileRes.arrayBuffer());
-    const uploadedFile = await toFile(bytes, `call.${ext}`);
-
-    const openai = new OpenAI({ apiKey });
-
-    // 1) Transcribe
-    const transcription = await openai.audio.transcriptions.create({
-      file: uploadedFile,
-      model: "gpt-4o-mini-transcribe",
-    });
-
-    const transcriptText = transcription.text?.trim() || "";
-    if (!transcriptText) {
-      return NextResponse.json(
-        { error: "Transcription returned empty text." },
+        { error: "Failed to download audio from Blob" },
         { status: 500 }
       );
     }
 
-    // 2) Coach
-    const coaching = await openai.chat.completions.create({
+    const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
+    const contentType =
+      audioRes.headers.get("content-type") || "audio/mpeg";
+
+    const audioFile = await toFile(audioBuffer, "call-audio", {
+      type: contentType,
+    });
+
+    // Transcribe
+    const transcription = await openai.audio.transcriptions.create({
+      file: audioFile,
+      model: "gpt-4o-mini-transcribe",
+    });
+
+    const transcriptText = transcription.text?.trim();
+    if (!transcriptText) {
+      return NextResponse.json(
+        { error: "Empty transcription result" },
+        { status: 500 }
+      );
+    }
+
+    // Coaching + Scoring
+    const scoringPrompt = `
+Call Type: ${callTypeText}
+Goal: ${goalText}
+
+Transcript:
+${transcriptText}
+
+Instructions:
+- Score strictly using the rubric.
+- Follow the OUTPUT FORMAT exactly.
+- Be brutally honest and improvement-focused.
+`.trim();
+
+    const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      temperature: 0.4,
+      temperature: 0.2,
       messages: [
         { role: "system", content: DEN_COACH_SYSTEM_PROMPT },
-        {
-          role: "user",
-          content:
-            `Call context:\n` +
-            `- Call type: ${callTypeText}\n` +
-            `- Goal: ${goalText}\n\n` +
-            `Transcript:\n\n${transcriptText}`,
-        },
+        { role: "user", content: scoringPrompt },
       ],
     });
 
     const feedback =
-      coaching.choices?.[0]?.message?.content?.trim() || "No feedback returned.";
+      completion.choices[0]?.message?.content?.trim() || "";
 
     return NextResponse.json({
       transcript: transcriptText,
       feedback,
-      callType: callTypeText,
-      goal: goalText,
     });
   } catch (err: any) {
     return NextResponse.json(
-      { error: "Server crash in /api/score-call", details: err?.message || String(err) },
+      { error: err?.message || String(err) },
       { status: 500 }
     );
   }
