@@ -11,7 +11,7 @@ export default function ScorePage() {
   const [feedback, setFeedback] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // NEW: post-score Q&A
+  // Post-score Q&A
   const [csrQuestion, setCsrQuestion] = useState("");
   const [followupStatus, setFollowupStatus] = useState("");
   const [followupAnswer, setFollowupAnswer] = useState("");
@@ -28,13 +28,12 @@ export default function ScorePage() {
     setTranscript("");
     setFeedback("");
 
-    // reset follow-up state whenever a new scoring run starts
+    // Reset follow-up state
     setCsrQuestion("");
     setFollowupStatus("");
     setFollowupAnswer("");
 
     try {
-      // 1) DIRECT upload from browser -> Vercel Blob
       setStatus("Uploading audio...");
       const blob = await upload(file.name, file, {
         access: "public",
@@ -47,7 +46,6 @@ export default function ScorePage() {
         return;
       }
 
-      // 2) Score using ONLY the blobUrl (tiny payload)
       setStatus("Transcribing + scoring...");
       const scoreRes = await fetch("/api/score-call", {
         method: "POST",
@@ -93,10 +91,8 @@ export default function ScorePage() {
     setFollowupAnswer("");
 
     try {
-      setFollowupStatus("Sending question to Den Coach...");
+      setFollowupStatus("Sending question to Coach Denny...");
 
-      // This assumes your /api/score-call supports mode="followup"
-      // and returns { answer: string }.
       const res = await fetch("/api/score-call", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -178,11 +174,10 @@ export default function ScorePage() {
           <h3 style={{ marginTop: 18 }}>Coaching Feedback</h3>
           <pre style={{ whiteSpace: "pre-wrap" }}>{feedback}</pre>
 
-          {/* NEW: Post-score Q&A */}
-          <h3 style={{ marginTop: 18 }}>Ask Den Coach About This Call</h3>
+          <h3 style={{ marginTop: 18 }}></h3>
 
           <p style={{ marginTop: 6, opacity: 0.85 }}>
-            Ask a specific question. Den Coach will answer directly and give a stronger script.
+            Question about your call? Want to meet in the parking lot? Coach Denny will answer any question you have. 
           </p>
 
           <textarea
@@ -210,7 +205,7 @@ export default function ScorePage() {
                 opacity: followupLoading ? 0.7 : 1,
               }}
             >
-              {followupLoading ? "Asking..." : "Ask Den Coach"}
+              {followupLoading ? "Asking..." : "Ask Coach Denny"}
             </button>
           </div>
 
@@ -218,7 +213,7 @@ export default function ScorePage() {
 
           {followupAnswer && (
             <>
-              <h3 style={{ marginTop: 14 }}>Den Coach Answer</h3>
+              <h3 style={{ marginTop: 14 }}>Coach Denny Answer</h3>
               <pre style={{ whiteSpace: "pre-wrap" }}>{followupAnswer}</pre>
             </>
           )}
