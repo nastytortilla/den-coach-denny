@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 export const config = {
-  // Protect everything except Next.js internals and static files
+  // Protect everything except Next.js internals and favicon
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
 
@@ -16,11 +16,15 @@ function unauthorized() {
 }
 
 export function middleware(req: NextRequest) {
-  // Optional: allow health checks or a public route if you want later
-  // if (req.nextUrl.pathname.startsWith("/public")) return NextResponse.next();
+  // Make rep images public so Looker Studio can load them
+  if (req.nextUrl.pathname.startsWith("/reps/")) {
+    return NextResponse.next();
+  }
 
   const auth = req.headers.get("authorization");
-  if (!auth?.startsWith("Basic ")) return unauthorized();
+  if (!auth?.startsWith("Basic ")) {
+    return unauthorized();
+  }
 
   const base64 = auth.slice("Basic ".length);
   const decoded = atob(base64);
@@ -29,12 +33,14 @@ export function middleware(req: NextRequest) {
   const expectedUser = process.env.BASIC_AUTH_USER;
   const expectedPass = process.env.BASIC_AUTH_PASS;
 
+  // If env vars are missing, deny by default
   if (!expectedUser || !expectedPass) {
-    // Misconfigured env vars → deny by default
     return unauthorized();
   }
 
-  if (user !== expectedUser || pass !== expectedPass) return unauthorized();
+  if (user !== expectedUser || pass !== expectedPass) {
+    return unauthorized();
+  }
 
   return NextResponse.next();
 }
