@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { upload } from "@vercel/blob/client";
 import DenShell from "../components/DenShell";
+import TalkToCoachDenny from "../components/TalkToCoachDenny";
 
 export default function ScorePage() {
   const [file, setFile] = useState<File | null>(null);
@@ -16,6 +17,14 @@ export default function ScorePage() {
   const [followupStatus, setFollowupStatus] = useState("");
   const [followupAnswer, setFollowupAnswer] = useState("");
   const [followupLoading, setFollowupLoading] = useState(false);
+
+  function getErrorMessage(err: unknown) {
+    if (err instanceof Error) {
+      return err.message;
+    }
+
+    return String(err);
+  }
 
   async function uploadAndScore() {
     if (!file) {
@@ -35,18 +44,21 @@ export default function ScorePage() {
 
     try {
       setStatus("Uploading audio...");
+
       const blob = await upload(file.name, file, {
         access: "public",
         handleUploadUrl: "/api/blob/upload",
       });
 
       const blobUrl = blob?.url;
+
       if (!blobUrl) {
         setStatus("Upload failed: no blob URL returned.");
         return;
       }
 
       setStatus("Transcribing + scoring...");
+
       const scoreRes = await fetch("/api/score-call", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -59,6 +71,7 @@ export default function ScorePage() {
       });
 
       const scoreData = await scoreRes.json().catch(() => null);
+
       if (!scoreRes.ok) {
         setStatus(
           "Score failed: " + (scoreData?.error || `HTTP ${scoreRes.status}`)
@@ -69,8 +82,8 @@ export default function ScorePage() {
       setTranscript(scoreData?.transcript ?? "");
       setFeedback(scoreData?.feedback ?? "");
       setStatus("Done!");
-    } catch (err: any) {
-      setStatus("Error: " + (err?.message || String(err)));
+    } catch (err: unknown) {
+      setStatus("Error: " + getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -81,6 +94,7 @@ export default function ScorePage() {
       setFollowupStatus("Run a score first so I have context.");
       return;
     }
+
     if (!csrQuestion.trim()) {
       setFollowupStatus("Type a question first.");
       return;
@@ -105,6 +119,7 @@ export default function ScorePage() {
       });
 
       const data = await res.json().catch(() => null);
+
       if (!res.ok) {
         setFollowupStatus(
           "Follow-up failed: " + (data?.error || `HTTP ${res.status}`)
@@ -114,8 +129,8 @@ export default function ScorePage() {
 
       setFollowupAnswer(data?.answer ?? "");
       setFollowupStatus("Done!");
-    } catch (err: any) {
-      setFollowupStatus("Error: " + (err?.message || String(err)));
+    } catch (err: unknown) {
+      setFollowupStatus("Error: " + getErrorMessage(err));
     } finally {
       setFollowupLoading(false);
     }
@@ -134,8 +149,19 @@ export default function ScorePage() {
         onChange={(e) => setFile(e.target.files?.[0] ?? null)}
       />
 
-      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <label htmlFor="audioFile" className="den-link" style={{ cursor: "pointer" }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 10,
+          alignItems: "center",
+          flexWrap: "wrap",
+        }}
+      >
+        <label
+          htmlFor="audioFile"
+          className="den-link"
+          style={{ cursor: "pointer" }}
+        >
           Choose audio file
         </label>
 
@@ -174,10 +200,11 @@ export default function ScorePage() {
           <h3 style={{ marginTop: 18 }}>Coaching Feedback</h3>
           <pre style={{ whiteSpace: "pre-wrap" }}>{feedback}</pre>
 
-          <h3 style={{ marginTop: 18 }}></h3>
+          <h3 style={{ marginTop: 18 }}>Ask Coach Denny</h3>
 
           <p style={{ marginTop: 6, opacity: 0.85 }}>
-            Question about your call? Want to meet in the parking lot? Coach Denny will answer any question you have. 
+            Question about your call? Want to meet in the parking lot? Coach
+            Denny will answer any question you have.
           </p>
 
           <textarea
@@ -217,6 +244,8 @@ export default function ScorePage() {
               <pre style={{ whiteSpace: "pre-wrap" }}>{followupAnswer}</pre>
             </>
           )}
+
+          <TalkToCoachDenny transcript={transcript} scoreOutput={feedback} />
         </>
       )}
     </DenShell>
