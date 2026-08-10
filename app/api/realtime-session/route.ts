@@ -96,15 +96,23 @@ ${transcript}
         seconds: 600,
       },
       session: {
-        type: "realtime",
-        model: "gpt-realtime",
-        instructions,
-        audio: {
-          output: {
-            voice: "cedar",
-          },
-        },
+  type: "realtime",
+  model: "gpt-realtime-2",
+  instructions,
+  reasoning: {
+    effort: "low",
+  },
+  audio: {
+    input: {
+      turn_detection: {
+        type: "semantic_vad",
       },
+    },
+    output: {
+      voice: "cedar",
+    },
+  },
+},
     };
 
     const realtimeRes = await fetch(
