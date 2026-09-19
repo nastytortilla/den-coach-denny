@@ -7,6 +7,11 @@ import { connectServiceTitanMcp } from "@/lib/serviceTitanMcp";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
+type ConversationMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 function formatMcpResult(result: unknown) {
   const serialized = JSON.stringify(result);
   const text = serialized ?? String(result);
@@ -19,6 +24,44 @@ function formatMcpResult(result: unknown) {
   }
 
   return text;
+}
+
+function getConversationMessages(
+  body: any
+): ConversationMessage[] {
+  if (Array.isArray(body?.messages)) {
+    return body.messages
+      .filter(
+        (message: any) =>
+          (message?.role === "user" ||
+            message?.role === "assistant") &&
+          typeof message?.content === "string" &&
+          message.content.trim()
+      )
+      .slice(-20)
+      .map((message: any) => ({
+        role: message.role,
+        content: message.content
+          .trim()
+          .slice(0, 12000),
+      }));
+  }
+
+  const input =
+    typeof body?.input === "string"
+      ? body.input.trim()
+      : "";
+
+  if (!input) {
+    return [];
+  }
+
+  return [
+    {
+      role: "user",
+      content: input.slice(0, 12000),
+    },
+  ];
 }
 
 export async function POST(req: Request) {
@@ -45,21 +88,23 @@ export async function POST(req: Request) {
       );
     }
 
-    const body = await req.json().catch(() => ({}));
+    const body = await req
+      .json()
+      .catch(() => ({}));
 
-    const input =
-      typeof body?.input === "string"
-        ? body.input.trim()
-        : "";
+    const conversation =
+      getConversationMessages(body);
 
-    if (!input) {
+    if (conversation.length === 0) {
       return NextResponse.json(
-        { error: "Missing input" },
+        { error: "Missing conversation input" },
         { status: 400 }
       );
     }
 
-    const tokenResponse = await auth0.getAccessToken();
+    const tokenResponse =
+      await auth0.getAccessToken();
+
     const accessToken = tokenResponse.token;
 
     if (!accessToken) {
@@ -75,7 +120,8 @@ export async function POST(req: Request) {
     mcpClient =
       await connectServiceTitanMcp(accessToken);
 
-    const mcpToolList = await mcpClient.listTools();
+    const mcpToolList =
+      await mcpClient.listTools();
 
     const openAiTools = mcpToolList.tools.map(
       (tool) => ({
@@ -103,23 +149,33 @@ export async function POST(req: Request) {
 
 You have access to live ServiceTitan MCP tools.
 
-Use those tools whenever the user asks about sales consultants,
-sales appointments, availability, calendars, non-job blocks,
-customer locations, routes, drive time, or scheduling.
+Use the ServiceTitan tools for sales-consultant schedules,
+appointments, non-job blocks, event blockers, availability,
+customer locations, territories, and other scheduling data.
+
+Use the routing tool for mileage and drive-time comparisons
+whenever routing information is needed.
+
+The routing tool uses the Google Routes API configured inside
+the ServiceTitan MCP server.
 
 This route is only for sales appointment placement.
 Do not apply installer scheduling rules.
 
-Never claim that you checked ServiceTitan unless you actually
-used a ServiceTitan tool.`,
+The conversation may contain earlier recommendations and
+follow-up questions. Preserve that context.
+
+If the user asks for three more options, exclude the options
+already presented and use live ServiceTitan data to find the
+next three valid choices.
+
+Never claim that ServiceTitan or Google Routes was checked
+unless the appropriate tool was actually used.`,
       },
-      {
-        role: "user",
-        content: input,
-      },
+      ...conversation,
     ];
 
-    for (let round = 0; round < 8; round++) {
+    for (let round = 0; round < 12; round++) {
       const completion =
         await openai.chat.completions.create({
           model: "gpt-4o-mini",
@@ -134,14 +190,18 @@ used a ServiceTitan tool.`,
 
       if (!message) {
         return NextResponse.json(
-          { error: "OpenAI returned no message" },
+          {
+            error:
+              "OpenAI returned no message",
+          },
           { status: 502 }
         );
       }
 
       messages.push(message);
 
-      const toolCalls = message.tool_calls || [];
+      const toolCalls =
+        message.tool_calls || [];
 
       if (toolCalls.length === 0) {
         const reply =

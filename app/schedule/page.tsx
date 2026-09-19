@@ -3,24 +3,53 @@
 import { useState } from "react";
 import DenShell from "../components/DenShell";
 
+type ConversationMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 export default function SchedulePage() {
   const [input, setInput] = useState(
-    "Find the best three sales appointment options for a customer in Citrus Heights, CA."
+    "Find the earliest three sales appointment options for 7953 Kyle Ct, Citrus Heights, CA."
   );
-  const [output, setOutput] = useState("");
+
+  const [conversation, setConversation] =
+    useState<ConversationMessage[]>([]);
+
   const [status, setStatus] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  async function findAppointments() {
+  async function askDenny() {
+    const trimmedInput = input.trim();
+
+    if (!trimmedInput || loading) {
+      return;
+    }
+
+    const userMessage: ConversationMessage = {
+      role: "user",
+      content: trimmedInput,
+    };
+
+    const nextConversation = [
+      ...conversation,
+      userMessage,
+    ];
+
+    setConversation(nextConversation);
+    setInput("");
+    setStatus("Checking ServiceTitan and routes...");
+    setLoading(true);
+
     try {
-      setStatus("Checking ServiceTitan...");
-      setOutput("");
-
       const res = await fetch("/api/schedule", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ input }),
+        body: JSON.stringify({
+          messages: nextConversation,
+        }),
       });
 
       const text = await res.text();
@@ -45,13 +74,34 @@ export default function SchedulePage() {
         return;
       }
 
+      const assistantMessage: ConversationMessage = {
+        role: "assistant",
+        content:
+          data.reply || "No reply returned.",
+      };
+
+      setConversation([
+        ...nextConversation,
+        assistantMessage,
+      ]);
+
       setStatus("");
-      setOutput(data.reply || "");
     } catch (error: any) {
       setStatus(
-        `Error: ${error?.message || "Request failed"}`
+        `Error: ${
+          error?.message || "Request failed"
+        }`
       );
+    } finally {
+      setLoading(false);
     }
+  }
+
+  function startNewSearch() {
+    setConversation([]);
+    setInput("");
+    setStatus("");
+    setLoading(false);
   }
 
   return (
@@ -60,22 +110,53 @@ export default function SchedulePage() {
       subtitle="Find the best sales consultant, date, and time"
     >
       <p style={{ marginTop: 0, fontWeight: 800 }}>
-        Describe the customer and requested appointment:
+        {conversation.length === 0
+          ? "Describe the customer and requested appointment:"
+          : "Ask Denny a follow-up question:"}
       </p>
 
       <textarea
         className="den-textarea"
         value={input}
-        onChange={(event) => setInput(event.target.value)}
+        placeholder={
+          conversation.length === 0
+            ? "Enter the customer address and any requested date or time."
+            : 'Try: "Why?" or "The customer needs three more options."'
+        }
+        onChange={(event) =>
+          setInput(event.target.value)
+        }
       />
 
-      <div style={{ marginTop: 12 }}>
+      <div
+        style={{
+          marginTop: 12,
+          display: "flex",
+          gap: 10,
+          flexWrap: "wrap",
+        }}
+      >
         <button
-          onClick={findAppointments}
+          onClick={askDenny}
           className="den-link"
+          disabled={loading || !input.trim()}
         >
-          Find Best Appointment
+          {loading
+            ? "Checking..."
+            : conversation.length === 0
+              ? "Find Best Appointments"
+              : "Ask Denny"}
         </button>
+
+        {conversation.length > 0 && (
+          <button
+            onClick={startNewSearch}
+            className="den-link"
+            disabled={loading}
+          >
+            Start New Search
+          </button>
+        )}
       </div>
 
       {status && (
@@ -89,16 +170,40 @@ export default function SchedulePage() {
         </pre>
       )}
 
-      {output && (
-        <>
-          <h3 style={{ marginTop: 18 }}>
-            Scheduling Recommendation
-          </h3>
+      {conversation.length > 0 && (
+        <div style={{ marginTop: 22 }}>
+          <h3>Scheduling Conversation</h3>
 
-          <pre style={{ whiteSpace: "pre-wrap" }}>
-            {output}
-          </pre>
-        </>
+          {conversation.map((message, index) => (
+            <div
+              key={`${message.role}-${index}`}
+              style={{
+                marginTop: 16,
+                paddingTop: 14,
+                borderTop:
+                  index === 0
+                    ? "none"
+                    : "1px solid rgba(0, 0, 0, 0.15)",
+              }}
+            >
+              <strong>
+                {message.role === "user"
+                  ? "CSR"
+                  : "Denny"}
+              </strong>
+
+              <pre
+                style={{
+                  marginTop: 8,
+                  whiteSpace: "pre-wrap",
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {message.content}
+              </pre>
+            </div>
+          ))}
+        </div>
       )}
     </DenShell>
   );
