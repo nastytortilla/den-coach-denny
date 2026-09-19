@@ -56,8 +56,8 @@ export default function SchedulePage() {
 
   return (
     <DenShell
-      title="Schedule With Denny"
-      subtitle="Find the best placement for a sales appointment"
+      title="Denny’s Smart Scheduler"
+      subtitle="Find the best sales consultant, date, and time"
     >
       <p style={{ marginTop: 0, fontWeight: 800 }}>
         Describe the customer and requested appointment:

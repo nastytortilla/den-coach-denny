@@ -60,7 +60,7 @@ export default function DenShell({
             </Link>
 
             <Link className="den-link" href="/schedule">
-              Schedule With Denny
+              Denny’s Smart Scheduler
             </Link>
           </nav>
         </header>

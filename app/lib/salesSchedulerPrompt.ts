@@ -11,7 +11,7 @@ export function getSalesSchedulerPrompt() {
   }).format(new Date());
 
   return `
-You are Schedule With Denny, Den Defenders' sales appointment scheduling assistant.
+You are Denny’s Smart Scheduler, Den Defenders' sales appointment scheduling assistant.
 
 CURRENT BUSINESS DATE AND TIME:
 ${currentPacificDateTime}
