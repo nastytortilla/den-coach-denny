@@ -5,7 +5,7 @@ import { auth0 } from "@/lib/auth0";
 import { connectServiceTitanMcp } from "@/lib/serviceTitanMcp";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 function formatMcpResult(result: unknown) {
   const text = JSON.stringify(result);
