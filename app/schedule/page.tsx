@@ -8,14 +8,13 @@ type ConversationMessage = {
   content: string;
 };
 
-export default function SchedulePage() {
-  const [input, setInput] = useState(
-    "Find the earliest three sales appointment options for 7953 Kyle Ct, Citrus Heights, CA."
-  );
+const DEFAULT_SEARCH =
+  "Find the earliest three sales appointment options for a customer in Citrus Heights, CA.";
 
+export default function SchedulePage() {
+  const [input, setInput] = useState(DEFAULT_SEARCH);
   const [conversation, setConversation] =
     useState<ConversationMessage[]>([]);
-
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -31,14 +30,11 @@ export default function SchedulePage() {
       content: trimmedInput,
     };
 
-    const nextConversation = [
-      ...conversation,
-      userMessage,
-    ];
+    const nextConversation = [...conversation, userMessage];
 
     setConversation(nextConversation);
     setInput("");
-    setStatus("Checking ServiceTitan and routes...");
+    setStatus("Checking sales schedules and routes...");
     setLoading(true);
 
     try {
@@ -76,8 +72,7 @@ export default function SchedulePage() {
 
       const assistantMessage: ConversationMessage = {
         role: "assistant",
-        content:
-          data.reply || "No reply returned.",
+        content: data.reply || "No reply returned.",
       };
 
       setConversation([
@@ -99,7 +94,7 @@ export default function SchedulePage() {
 
   function startNewSearch() {
     setConversation([]);
-    setInput("");
+    setInput(DEFAULT_SEARCH);
     setStatus("");
     setLoading(false);
   }
@@ -109,9 +104,47 @@ export default function SchedulePage() {
       title="Denny’s Smart Scheduler"
       subtitle="Find the best sales consultant, date, and time"
     >
+      {conversation.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <h3 style={{ marginTop: 0 }}>
+            Scheduling Conversation
+          </h3>
+
+          {conversation.map((message, index) => (
+            <div
+              key={`${message.role}-${index}`}
+              style={{
+                marginTop: 16,
+                paddingTop: 14,
+                borderTop:
+                  index === 0
+                    ? "none"
+                    : "1px solid rgba(0, 0, 0, 0.15)",
+              }}
+            >
+              <strong>
+                {message.role === "user"
+                  ? "CSR"
+                  : "Denny"}
+              </strong>
+
+              <pre
+                style={{
+                  marginTop: 8,
+                  whiteSpace: "pre-wrap",
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {message.content}
+              </pre>
+            </div>
+          ))}
+        </div>
+      )}
+
       <p style={{ marginTop: 0, fontWeight: 800 }}>
         {conversation.length === 0
-          ? "Describe the customer and requested appointment:"
+          ? "Enter the customer’s city or address:"
           : "Ask Denny a follow-up question:"}
       </p>
 
@@ -120,7 +153,7 @@ export default function SchedulePage() {
         value={input}
         placeholder={
           conversation.length === 0
-            ? "Enter the customer address and any requested date or time."
+            ? "Example: Find the earliest three sales appointment options for a customer in Citrus Heights, CA."
             : 'Try: "Why?" or "The customer needs three more options."'
         }
         onChange={(event) =>
@@ -164,46 +197,11 @@ export default function SchedulePage() {
           style={{
             marginTop: 12,
             whiteSpace: "pre-wrap",
+            overflowWrap: "anywhere",
           }}
         >
           {status}
         </pre>
-      )}
-
-      {conversation.length > 0 && (
-        <div style={{ marginTop: 22 }}>
-          <h3>Scheduling Conversation</h3>
-
-          {conversation.map((message, index) => (
-            <div
-              key={`${message.role}-${index}`}
-              style={{
-                marginTop: 16,
-                paddingTop: 14,
-                borderTop:
-                  index === 0
-                    ? "none"
-                    : "1px solid rgba(0, 0, 0, 0.15)",
-              }}
-            >
-              <strong>
-                {message.role === "user"
-                  ? "CSR"
-                  : "Denny"}
-              </strong>
-
-              <pre
-                style={{
-                  marginTop: 8,
-                  whiteSpace: "pre-wrap",
-                  overflowWrap: "anywhere",
-                }}
-              >
-                {message.content}
-              </pre>
-            </div>
-          ))}
-        </div>
       )}
     </DenShell>
   );

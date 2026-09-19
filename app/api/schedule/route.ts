@@ -12,39 +12,112 @@ type ConversationMessage = {
   content: string;
 };
 
-function formatMcpResult(result: unknown) {
-  const serialized = JSON.stringify(result);
-  const text = serialized ?? String(result);
+const MAX_CONVERSATION_CHARACTERS = 30000;
+const MAX_MESSAGE_CHARACTERS = 6000;
+const MAX_SINGLE_TOOL_RESULT = 12000;
+const MAX_TOTAL_TOOL_RESULTS = 60000;
 
-  if (text.length > 80000) {
-    return `${text.slice(
-      0,
-      80000
-    )}\n\n[Result shortened because it was very large.]`;
+function formatMcpResult(
+  result: unknown,
+  maximumLength = MAX_SINGLE_TOOL_RESULT
+) {
+  let text: string;
+
+  try {
+    const serialized = JSON.stringify(result);
+    text = serialized ?? String(result);
+  } catch {
+    text = String(result);
   }
 
-  return text;
+  if (maximumLength <= 0) {
+    return "[Additional tool result omitted because the scheduling-data limit was reached.]";
+  }
+
+  if (text.length <= maximumLength) {
+    return text;
+  }
+
+  const endingLength = Math.min(2000, Math.floor(maximumLength / 4));
+  const beginningLength = maximumLength - endingLength;
+
+  return `${text.slice(0, beginningLength)}
+
+[Middle of result removed because the ServiceTitan response was very large.]
+
+${text.slice(-endingLength)}`;
+}
+
+function isBlockedCustomerLookupTool(toolName: string) {
+  const normalizedName = toolName.toLowerCase();
+
+  if (
+    normalizedName.includes("route") ||
+    normalizedName.includes("drive_time") ||
+    normalizedName.includes("distance")
+  ) {
+    return false;
+  }
+
+  return (
+    normalizedName.includes("customer") ||
+    normalizedName.includes("location_search") ||
+    normalizedName.includes("search_location") ||
+    normalizedName.includes("location_details")
+  );
 }
 
 function getConversationMessages(
   body: any
 ): ConversationMessage[] {
   if (Array.isArray(body?.messages)) {
-    return body.messages
-      .filter(
-        (message: any) =>
-          (message?.role === "user" ||
-            message?.role === "assistant") &&
-          typeof message?.content === "string" &&
-          message.content.trim()
-      )
-      .slice(-20)
-      .map((message: any) => ({
+    const sanitizedMessages: ConversationMessage[] =
+      body.messages
+        .filter(
+          (message: any) =>
+            (message?.role === "user" ||
+              message?.role === "assistant") &&
+            typeof message?.content === "string" &&
+            message.content.trim()
+        )
+        .slice(-12)
+        .map((message: any) => ({
+          role: message.role,
+          content: message.content
+            .trim()
+            .slice(0, MAX_MESSAGE_CHARACTERS),
+        }));
+
+    const selectedMessages: ConversationMessage[] = [];
+    let totalCharacters = 0;
+
+    for (
+      let index = sanitizedMessages.length - 1;
+      index >= 0;
+      index--
+    ) {
+      const message = sanitizedMessages[index];
+      const remainingCharacters =
+        MAX_CONVERSATION_CHARACTERS - totalCharacters;
+
+      if (remainingCharacters <= 0) {
+        break;
+      }
+
+      const content = message.content.slice(
+        0,
+        remainingCharacters
+      );
+
+      selectedMessages.unshift({
         role: message.role,
-        content: message.content
-          .trim()
-          .slice(0, 12000),
-      }));
+        content,
+      });
+
+      totalCharacters += content.length;
+    }
+
+    return selectedMessages;
   }
 
   const input =
@@ -59,7 +132,10 @@ function getConversationMessages(
   return [
     {
       role: "user",
-      content: input.slice(0, 12000),
+      content: input.slice(
+        0,
+        MAX_MESSAGE_CHARACTERS
+      ),
     },
   ];
 }
@@ -123,14 +199,20 @@ export async function POST(req: Request) {
     const mcpToolList =
       await mcpClient.listTools();
 
-    const openAiTools = mcpToolList.tools.map(
+    const permittedTools =
+      mcpToolList.tools.filter(
+        (tool) =>
+          !isBlockedCustomerLookupTool(tool.name)
+      );
+
+    const openAiTools = permittedTools.map(
       (tool) => ({
         type: "function" as const,
         function: {
           name: tool.name,
           description:
             tool.description ||
-            `ServiceTitan tool: ${tool.name}`,
+            `ServiceTitan scheduling tool: ${tool.name}`,
           parameters:
             tool.inputSchema as Record<
               string,
@@ -139,6 +221,16 @@ export async function POST(req: Request) {
         },
       })
     );
+
+    if (openAiTools.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "No permitted ServiceTitan scheduling tools were available.",
+        },
+        { status: 502 }
+      );
+    }
 
     const openai = new OpenAI({ apiKey });
 
@@ -149,31 +241,34 @@ export async function POST(req: Request) {
 
 You have access to live ServiceTitan MCP tools.
 
-Use the ServiceTitan tools for sales-consultant schedules,
-appointments, non-job blocks, event blockers, availability,
-customer locations, territories, and other scheduling data.
+IMPORTANT TOOL RESTRICTIONS:
 
-Use the routing tool for mileage and drive-time comparisons
-whenever routing information is needed.
-
-The routing tool uses the Google Routes API configured inside
-the ServiceTitan MCP server.
+- Do not search for the prospective customer.
+- Do not verify whether the customer exists in ServiceTitan.
+- Do not search by customer name, phone number, street address, or customer record.
+- The supplied city, ZIP code, or address is only the proposed appointment destination.
+- A city and state are enough to perform a scheduling search.
+- Use ServiceTitan only to check eligible sales consultants' schedules, appointments, jobs, non-job events, and event blockers.
+- Use the routing tool for mileage and drive-time comparisons.
+- The routing tool uses the Google Routes API configured inside the ServiceTitan MCP server.
+- If only a city is supplied, perform a city-level routing estimate.
+- Never require a complete street address before returning appointment options.
 
 This route is only for sales appointment placement.
 Do not apply installer scheduling rules.
 
-The conversation may contain earlier recommendations and
-follow-up questions. Preserve that context.
+The conversation may contain earlier recommendations and follow-up questions. Preserve that context.
 
-If the user asks for three more options, exclude the options
-already presented and use live ServiceTitan data to find the
-next three valid choices.
+If the user asks for three more options, exclude the options already presented and use live consultant schedule data to find the next three valid choices.
 
-Never claim that ServiceTitan or Google Routes was checked
-unless the appropriate tool was actually used.`,
+Tool results may be shortened when ServiceTitan returns excessive data. Use the relevant data that is available. If something cannot be verified from the shortened result, clearly say what still needs confirmation.
+
+Never claim that ServiceTitan or Google Routes was checked unless the appropriate tool was actually used.`,
       },
       ...conversation,
     ];
+
+    let totalToolResultCharacters = 0;
 
     for (let round = 0; round < 12; round++) {
       const completion =
@@ -183,6 +278,7 @@ unless the appropriate tool was actually used.`,
           messages,
           tools: openAiTools,
           tool_choice: "auto",
+          parallel_tool_calls: false,
         });
 
       const message =
@@ -240,7 +336,7 @@ unless the appropriate tool was actually used.`,
             }
           );
 
-        const toolResultText =
+        const errorResultText =
           formatMcpResult(toolResult);
 
         if (
@@ -252,11 +348,29 @@ unless the appropriate tool was actually used.`,
           return NextResponse.json(
             {
               error: `ServiceTitan tool failed: ${toolCall.function.name}`,
-              details: toolResultText,
+              details: errorResultText,
             },
             { status: 502 }
           );
         }
+
+        const remainingToolCharacters =
+          MAX_TOTAL_TOOL_RESULTS -
+          totalToolResultCharacters;
+
+        const allowedResultLength = Math.min(
+          MAX_SINGLE_TOOL_RESULT,
+          Math.max(0, remainingToolCharacters)
+        );
+
+        const toolResultText =
+          formatMcpResult(
+            toolResult,
+            allowedResultLength
+          );
+
+        totalToolResultCharacters +=
+          toolResultText.length;
 
         messages.push({
           role: "tool",
@@ -269,7 +383,7 @@ unless the appropriate tool was actually used.`,
     return NextResponse.json(
       {
         error:
-          "The request needed too many ServiceTitan tool steps. Please make the request more specific.",
+          "The request needed too many ServiceTitan tool steps. Please narrow the requested location or date range.",
       },
       { status: 500 }
     );
