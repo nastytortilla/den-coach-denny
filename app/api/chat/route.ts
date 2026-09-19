@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
-import { DEN_COACH_SYSTEM_PROMPT } from "@/app/lib/denCoachPrompt";
+import { COACH_CHAT_SYSTEM_PROMPT } from "@/app/lib/coachChatPrompt";
 import { auth0 } from "@/lib/auth0";
 import { connectServiceTitanMcp } from "@/lib/serviceTitanMcp";
 
@@ -85,7 +85,7 @@ export async function POST(req: Request) {
     const messages: any[] = [
       {
         role: "system",
-        content: `${DEN_COACH_SYSTEM_PROMPT}
+        content: `${COACH_CHAT_SYSTEM_PROMPT}
 
 You also have access to live ServiceTitan MCP tools.
 
