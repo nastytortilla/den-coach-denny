@@ -152,20 +152,37 @@ Never claim you checked ServiceTitan unless you actually used a tool.`,
         }
 
         const toolResult = await mcpClient.callTool(
-          {
-            name: toolCall.function.name,
-            arguments: toolArguments,
-          },
-          {
-            timeout: 240_000,
-          }
-        );
+  {
+    name: toolCall.function.name,
+    arguments: toolArguments,
+  },
+  {
+    timeout: 240_000,
+  }
+);
 
-        messages.push({
-          role: "tool",
-          tool_call_id: toolCall.id,
-          content: formatMcpResult(toolResult),
-        });
+const toolResultText = formatMcpResult(toolResult);
+
+if (
+  typeof toolResult === "object" &&
+  toolResult !== null &&
+  "isError" in toolResult &&
+  toolResult.isError
+) {
+  return NextResponse.json(
+    {
+      error: `ServiceTitan tool failed: ${toolCall.function.name}`,
+      details: toolResultText,
+    },
+    { status: 502 }
+  );
+}
+
+messages.push({
+  role: "tool",
+  tool_call_id: toolCall.id,
+  content: toolResultText,
+});
       }
     }
 
