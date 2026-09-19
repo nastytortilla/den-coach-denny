@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { DEN_COACH_SYSTEM_PROMPT } from "@/app/lib/denCoachPrompt";
+import { getDispatcherDennyPrompt } from "@/app/lib/dispatcherDennyPrompt";
 import { auth0 } from "@/lib/auth0";
 import { connectServiceTitanMcp } from "@/lib/serviceTitanMcp";
 
@@ -86,10 +87,18 @@ export async function POST(req: Request) {
         role: "system",
         content: `${DEN_COACH_SYSTEM_PROMPT}
 
+${getDispatcherDennyPrompt()}
+
 You also have access to live ServiceTitan MCP tools.
+
 Use those tools whenever the user asks about customers, jobs, appointments,
 technicians, estimates, invoices, payments, projects, scheduling,
 availability, routes, or other ServiceTitan information.
+
+For installation scheduling requests, follow the Dispatcher Denny rules,
+check all qualified installers, and use live ServiceTitan information before
+making a recommendation.
+
 Never claim you checked ServiceTitan unless you actually used a tool.`,
       },
       {
@@ -143,14 +152,14 @@ Never claim you checked ServiceTitan unless you actually used a tool.`,
         }
 
         const toolResult = await mcpClient.callTool(
-  {
-    name: toolCall.function.name,
-    arguments: toolArguments,
-  },
-  {
-    timeout: 240_000,
-  }
-);
+          {
+            name: toolCall.function.name,
+            arguments: toolArguments,
+          },
+          {
+            timeout: 240_000,
+          }
+        );
 
         messages.push({
           role: "tool",
