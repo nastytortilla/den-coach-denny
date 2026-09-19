@@ -142,10 +142,15 @@ Never claim you checked ServiceTitan unless you actually used a tool.`,
           toolArguments = {};
         }
 
-        const toolResult = await mcpClient.callTool({
-          name: toolCall.function.name,
-          arguments: toolArguments,
-        });
+        const toolResult = await mcpClient.callTool(
+  {
+    name: toolCall.function.name,
+    arguments: toolArguments,
+  },
+  {
+    timeout: 240_000,
+  }
+);
 
         messages.push({
           role: "tool",
