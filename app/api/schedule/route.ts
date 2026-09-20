@@ -816,7 +816,7 @@ Once recommend_sales_schedule has returned successfully during the current reque
           tools: openAiTools,
           tool_choice:
             schedulerToolHasRun
-              ? "auto"
+              ? "none"
               : {
                   type: "function" as const,
                   function: {
