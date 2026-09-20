@@ -1,6 +1,5 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
-import { getSalesSchedulerPrompt } from "@/app/lib/salesSchedulerPrompt";
 import { auth0 } from "@/lib/auth0";
 import { connectServiceTitanMcp } from "@/lib/serviceTitanMcp";
 
@@ -18,9 +17,12 @@ type McpTool = {
   inputSchema: unknown;
 };
 
+const SALES_SCHEDULER_TOOL_NAME =
+  "recommend_sales_schedule";
+
 const MAX_CONVERSATION_CHARACTERS = 30000;
 const MAX_MESSAGE_CHARACTERS = 6000;
-const MAX_SINGLE_TOOL_RESULT = 30000;
+const MAX_SINGLE_TOOL_RESULT = 60000;
 const MAX_TOTAL_TOOL_RESULTS = 120000;
 const MAX_OPENAI_RETRIES = 5;
 
@@ -46,7 +48,7 @@ function formatMcpResult(
   }
 
   const endingLength = Math.min(
-    4000,
+    6000,
     Math.floor(maximumLength / 4)
   );
 
@@ -58,87 +60,6 @@ function formatMcpResult(
 [Middle of result removed because the ServiceTitan response was very large.]
 
 ${text.slice(-endingLength)}`;
-}
-
-function isBlockedCustomerLookupTool(
-  toolName: string
-) {
-  const normalizedName =
-    toolName.toLowerCase();
-
-  if (
-    normalizedName.includes("route") ||
-    normalizedName.includes("drive_time") ||
-    normalizedName.includes("distance")
-  ) {
-    return false;
-  }
-
-  return (
-    normalizedName.includes("customer") ||
-    normalizedName.includes("location_search") ||
-    normalizedName.includes("search_location") ||
-    normalizedName.includes("location_details")
-  );
-}
-
-function isSchedulingTool(tool: McpTool) {
-  const searchableText = `${
-    tool.name
-  } ${tool.description || ""}`.toLowerCase();
-
-  const excludedTerms = [
-    "invoice",
-    "estimate",
-    "payment",
-    "pricebook",
-    "inventory",
-    "purchase order",
-    "project details",
-    "project history",
-    "customer history",
-    "customer search",
-    "call recording",
-    "transcript",
-    "upload",
-    "marketing",
-    "membership",
-    "equipment",
-    "material",
-  ];
-
-  if (
-    excludedTerms.some((term) =>
-      searchableText.includes(term)
-    )
-  ) {
-    return false;
-  }
-
-  const schedulingTerms = [
-    "schedule",
-    "scheduling",
-    "calendar",
-    "appointment",
-    "availability",
-    "technician",
-    "employee roster",
-    "sales consultant",
-    "non-job",
-    "non job",
-    "event block",
-    "blocker",
-    "business time",
-    "route",
-    "routing",
-    "drive time",
-    "travel time",
-    "distance",
-  ];
-
-  return schedulingTerms.some((term) =>
-    searchableText.includes(term)
-  );
 }
 
 function getConversationMessages(
@@ -346,40 +267,39 @@ export async function POST(req: Request) {
     const mcpToolList =
       await mcpClient.listTools();
 
-    const permittedTools =
-      mcpToolList.tools.filter(
+    const salesSchedulerTool =
+      mcpToolList.tools.find(
         (tool) =>
-          !isBlockedCustomerLookupTool(
-            tool.name
-          ) &&
-          isSchedulingTool(tool as McpTool)
-      );
+          tool.name ===
+          SALES_SCHEDULER_TOOL_NAME
+      ) as McpTool | undefined;
 
-    const openAiTools =
-      permittedTools.map((tool) => ({
-        type: "function" as const,
-        function: {
-          name: tool.name,
-          description:
-            tool.description ||
-            `ServiceTitan scheduling tool: ${tool.name}`,
-          parameters:
-            tool.inputSchema as Record<
-              string,
-              unknown
-            >,
-        },
-      }));
-
-    if (openAiTools.length === 0) {
+    if (!salesSchedulerTool) {
       return NextResponse.json(
         {
           error:
-            "No permitted ServiceTitan scheduling tools were available.",
+            "ServiceTitan MCP Tool #50 recommend_sales_schedule is not available. Confirm the latest ServiceTitan MCP deployment is live and reconnect the MCP session.",
         },
         { status: 502 }
       );
     }
+
+    const openAiTools = [
+      {
+        type: "function" as const,
+        function: {
+          name: salesSchedulerTool.name,
+          description:
+            salesSchedulerTool.description ||
+            "Return validated Den Defenders sales appointment options from live ServiceTitan schedules and Google Routes.",
+          parameters:
+            salesSchedulerTool.inputSchema as Record<
+              string,
+              unknown
+            >,
+        },
+      },
+    ];
 
     const openai =
       new OpenAI({ apiKey });
@@ -387,60 +307,69 @@ export async function POST(req: Request) {
     const messages: any[] = [
       {
         role: "system",
-        content: `${getSalesSchedulerPrompt()}
+        content: `You are Denny Smart Scheduler for Den Defenders.
 
-You have access to live ServiceTitan MCP scheduling and routing tools.
+IMPORTANT: You are NOT the scheduling engine. ServiceTitan MCP Tool #50, recommend_sales_schedule, is the scheduling authority.
 
-IMPORTANT TOOL RESTRICTIONS:
+For every request for sales appointment dates, times, availability, earliest options, alternate options, or more options:
+- You MUST call recommend_sales_schedule before answering.
+- Do not call or ask for any other ServiceTitan tool.
+- Do not independently calculate calendar gaps, drive times, territories, lunch, return-home routing, appointment duration, or whether a slot is valid.
+- Do not invent, round, move, improve, or substitute a time returned by the tool.
+- Present only options returned as valid by recommend_sales_schedule.
+- Treat the tool's date, start time, end time, consultant, routing decision, previous event, next event, and validation reason as authoritative for this response.
+- If the tool returns no valid options, say that plainly rather than manufacturing an alternative.
 
-- Do not search for the prospective customer.
-- Do not verify whether the customer exists in ServiceTitan.
-- Do not search by customer name, phone number, street address, or customer record.
-- The supplied city, ZIP code, or address is only the proposed appointment destination.
-- A city and state are enough to perform a scheduling search.
-- Use ServiceTitan only to check eligible sales consultants' schedules, appointments, jobs, non-job events, and event blockers.
-- Use the routing tool for mileage and drive-time comparisons.
-- The routing tool uses the Google Routes API configured inside the ServiceTitan MCP server.
-- If only a city is supplied, perform a city-level routing estimate.
-- Never require a complete street address before returning appointment options.
+INPUT RULES:
+- The prospective customer does not need to exist in ServiceTitan.
+- Never search for the prospective customer.
+- A city and state are sufficient for appointmentLocation. Use an exact street address when the user supplied one.
+- If the user specifies a starting date, pass it as startDate.
+- If the user does not specify a starting date, omit startDate and let Tool #50 use the current Pacific business date.
+- If the user asks for a specific number of options, pass that number as maxRecommendations. Otherwise request 3.
 
-CALENDAR RESEARCH REQUIREMENTS:
+FOLLOW-UP RULES:
+- The conversation can contain options already presented earlier.
+- If the user asks for "three more", "more dates", "next options", or otherwise wants additional choices, call recommend_sales_schedule again.
+- Populate excludeOptions with every previously presented option that should not be repeated, using its date, local start time, and consultant when available.
+- Do not repeat an earlier option when the user asked for additional choices.
 
-- Read every returned appointment, Opportunity, DRM block, job, lunch, non-job event, and event blocker.
-- Do not treat a calendar block as available time.
-- Do not say a consultant has no nearby appointments unless live schedule data supports it.
-- When routing a later appointment, use the preceding appointment location as the origin.
-- Only use home as the origin for the first appointment of a route segment.
-- A later appointment may begin a new route segment only when there is enough time to return home first.
-- Eli R's consultations last exactly 1 hour.
-- Do not change Eli's duration to 1 hour and 30 minutes.
+OUTPUT:
+- Keep the answer easy for a CSR to read.
+- Show the consultant, date, start/end time, and a short reason each option works.
+- Include routing detail when it helps explain why a time is valid.
+- Mention city-level routing when the user supplied only a city instead of a street address.
+- Do not say anything was booked; Tool #50 is advisory/read-only.
 
-This route is only for sales appointment placement.
-Do not apply installer scheduling rules.
-
-The conversation may contain earlier recommendations and follow-up questions. Preserve that context.
-
-If the user asks for three more options, exclude options already presented and use live schedule data to find the next three valid choices.
-
-Never claim that ServiceTitan or Google Routes was checked unless the appropriate tool was actually used.`,
+Once recommend_sales_schedule has returned successfully during the current request, answer from that result. Do not call it a second time in the same request unless the first tool result explicitly says another call is required.`,
       },
       ...conversation,
     ];
 
     let totalToolResultCharacters = 0;
+    let schedulerToolHasRun = false;
 
     for (
       let round = 0;
-      round < 12;
+      round < 6;
       round++
     ) {
       const createCompletion = () =>
         openai.chat.completions.create({
           model: "gpt-4.1-mini",
-          temperature: 0.1,
+          temperature: 0,
           messages,
           tools: openAiTools,
-          tool_choice: "auto",
+          tool_choice:
+            schedulerToolHasRun
+              ? "auto"
+              : {
+                  type: "function" as const,
+                  function: {
+                    name:
+                      SALES_SCHEDULER_TOOL_NAME,
+                  },
+                },
           parallel_tool_calls: false,
         });
 
@@ -510,6 +439,16 @@ Never claim that ServiceTitan or Google Routes was checked unless the appropriat
         message.tool_calls || [];
 
       if (toolCalls.length === 0) {
+        if (!schedulerToolHasRun) {
+          return NextResponse.json(
+            {
+              error:
+                "Denny did not run the required sales scheduling tool.",
+            },
+            { status: 502 }
+          );
+        }
+
         const reply =
           message.content?.trim() ||
           "No reply returned.";
@@ -524,6 +463,29 @@ Never claim that ServiceTitan or Google Routes was checked unless the appropriat
           toolCall.type !== "function"
         ) {
           continue;
+        }
+
+        if (
+          toolCall.function.name !==
+          SALES_SCHEDULER_TOOL_NAME
+        ) {
+          return NextResponse.json(
+            {
+              error:
+                `Unexpected scheduling tool requested: ${toolCall.function.name}`,
+            },
+            { status: 502 }
+          );
+        }
+
+        if (schedulerToolHasRun) {
+          return NextResponse.json(
+            {
+              error:
+                "Denny attempted to rerun Tool #50 during the same scheduling request. Please retry the request.",
+            },
+            { status: 502 }
+          );
         }
 
         let toolArguments: Record<
@@ -544,7 +506,7 @@ Never claim that ServiceTitan or Google Routes was checked unless the appropriat
           await mcpClient.callTool(
             {
               name:
-                toolCall.function.name,
+                SALES_SCHEDULER_TOOL_NAME,
               arguments: toolArguments,
             },
             {
@@ -563,7 +525,8 @@ Never claim that ServiceTitan or Google Routes was checked unless the appropriat
         ) {
           return NextResponse.json(
             {
-              error: `ServiceTitan tool failed: ${toolCall.function.name}`,
+              error:
+                "ServiceTitan Tool #50 recommend_sales_schedule failed.",
               details: errorResultText,
             },
             { status: 502 }
@@ -592,6 +555,8 @@ Never claim that ServiceTitan or Google Routes was checked unless the appropriat
         totalToolResultCharacters +=
           toolResultText.length;
 
+        schedulerToolHasRun = true;
+
         messages.push({
           role: "tool",
           tool_call_id: toolCall.id,
@@ -603,7 +568,7 @@ Never claim that ServiceTitan or Google Routes was checked unless the appropriat
     return NextResponse.json(
       {
         error:
-          "The request needed too many ServiceTitan tool steps. Please narrow the requested location or date range.",
+          "The scheduling request did not finish after Tool #50 returned its result.",
       },
       { status: 500 }
     );
