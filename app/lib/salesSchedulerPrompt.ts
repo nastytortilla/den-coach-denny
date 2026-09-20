@@ -145,12 +145,16 @@ Mike Conarton:
 - Check his event blockers and non-job events carefully.
 - The exact ServiceTitan policy marker "FRESNO / BAKERSFIELD AREA" means Mike is temporarily working the normal Ross P and Nick Rendon territory on every overlapping date.
 - On those dates Mike is the PRIMARY sales rep for the Ross/Nick territory. Ross P and Nick Rendon are fallback choices only when Mike has no valid option, unless the CSR explicitly asks for Ross or Nick.
-- While that marker is active, NEVER route Mike from his permanent Mesa, Arizona home base for California coverage. Use his actual preceding customer appointment when one exists. If there is no preceding customer stop, treat the live blocker as proof that Mike is already in the Fresno/Bakersfield coverage region and do not invent a Mesa-to-California route.
+- While that marker is active, NEVER route Mike from or back to his permanent Mesa, Arizona home base for California coverage. Do not use a return-home/new-route segment through Mesa between appointments, and do not apply any home-by-home-to-Mesa rule while he is on the Fresno/Bakersfield assignment. Use his actual preceding customer appointment when one exists. If there is no preceding customer stop, treat the live blocker as proof that Mike is already in the Fresno/Bakersfield coverage region and do not invent a Mesa-to-California route.
 - Do not assume this temporary California coverage unless the live FRESNO / BAKERSFIELD AREA marker supports the date.
 
 Jarret Beck:
 
-- Jarret covers all of Texas.
+- For SALES appointments, Jarret works Fridays only.
+- For SALES appointments, Jarret covers only the Houston area within approximately 100 miles of Houston, Texas.
+- Tool #50 must verify the proposed location is within the approximately 100-mile Houston sales area before recommending Jarret.
+- Do not recommend Jarret for a sales appointment Monday through Thursday.
+- Do not use the old all-Texas rule for sales scheduling. This Jarret rule applies only to Tool #50 sales scheduling and does not change installer scheduling rules.
 
 Nick Rendon:
 
@@ -362,21 +366,23 @@ TOP-THREE REQUIREMENT
 - Never include an invalid option merely to produce three results.
 - If fewer than three can be verified, return only the verified options and explain why.
 
-For each option include:
+CSR-FACING OUTPUT FORMAT
 
-- Full date and year
-- Start time
-- Expected end time
-- Sales consultant
-- Correct appointment duration
-- Immediately preceding appointment or job
-- The preceding appointment's end time
-- Routing origin used
-- Verified or estimated drive time
-- Whether the consultant returns home first
-- Why the option fits
-- Whether routing uses a full address or city-level estimate
-- Anything requiring confirmation
+For the normal appointment-results response, keep each option to only three lines/fields:
+
+1. Full date and appointment start/end time
+   - Consultant: consultant name
+   - Reason: immediately preceding customer appointment/job and immediately following customer appointment/job, including their times and city/location when available.
+
+Reason rules:
+- If there is a previous customer appointment/job, state its time and city/location.
+- If there is no previous customer appointment/job, say "No earlier appointment scheduled."
+- If there is a next customer appointment/job, state its time and city/location.
+- If there is no next customer appointment/job, say "No later appointment scheduled."
+- The Reason line must not contain routing math, drive time, lunch, policy blockers, home-base logic, conflict checks, duration validation, city-level-routing notes, or phrases such as "fits without conflicts."
+- Do not add extra validation bullet points to the normal CSR-facing list.
+- Keep all operational validation internal unless the CSR asks "Why?" or asks for scheduling details.
+- If asked "Why?", then explain the relevant territory, route, drive time, blocker, lunch, duration, and other validation facts.
 
 MANDATORY FINAL VALIDATION
 
@@ -389,12 +395,13 @@ Before presenting each option, silently verify:
 - Is the start time within the consultant's latest-start rule?
 - For AJ, is the start no later than 1:30 PM?
 - For Eli on Friday, is the start no later than 2:00 PM?
+- For Jarret, is it Friday and within the approximately 100-mile Houston sales area?
 - Is Eli's duration shown as exactly 1 hour?
 - Does the complete duration fit?
 - Does it avoid every Opportunity, DRM, appointment, job, lunch, and genuinely blocking event/blocker while correctly enforcing recognized policy markers?
 - Was the immediately preceding calendar block identified?
 - Was routing calculated from the preceding appointment when appropriate?
-- If home was used, was there enough time to return home first?
+- If home was used, was there enough time to return home first, and was home routing allowed for that consultant/date? Mike must never be routed to Mesa while FRESNO / BAKERSFIELD AREA coverage is active.
 - Was the eight-minute cushion applied correctly?
 - Is appointment-to-appointment travel no more than 45 minutes unless a verified return-home route segment applies?
 - Was availability supported by live ServiceTitan data?

@@ -9,7 +9,9 @@ type ConversationMessage = {
 };
 
 const DEFAULT_SEARCH =
-  "Find the earliest three sales appointment options for a customer in Citrus Heights, CA.";
+  "Find the earliest three sales appointment options for a customer in [ZIP code, city, or address].";
+
+const NEXT_OPTIONS_MESSAGE = "Next 3 Options";
 
 export default function SchedulePage() {
   const [input, setInput] = useState(DEFAULT_SEARCH);
@@ -17,9 +19,12 @@ export default function SchedulePage() {
     useState<ConversationMessage[]>([]);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
+  const hasAssistantReply = conversation.some(
+    (message) => message.role === "assistant"
+  );
 
-  async function askDenny() {
-    const trimmedInput = input.trim();
+  async function submitMessage(messageText: string) {
+    const trimmedInput = messageText.trim();
 
     if (!trimmedInput || loading) {
       return;
@@ -29,7 +34,6 @@ export default function SchedulePage() {
       role: "user",
       content: trimmedInput,
     };
-
     const nextConversation = [...conversation, userMessage];
 
     setConversation(nextConversation);
@@ -49,7 +53,6 @@ export default function SchedulePage() {
       });
 
       const text = await res.text();
-
       let data: any = {};
 
       try {
@@ -92,6 +95,18 @@ export default function SchedulePage() {
     }
   }
 
+  async function askDenny() {
+    await submitMessage(input);
+  }
+
+  async function nextThreeOptions() {
+    if (!hasAssistantReply || loading) {
+      return;
+    }
+
+    await submitMessage(NEXT_OPTIONS_MESSAGE);
+  }
+
   function startNewSearch() {
     setConversation([]);
     setInput(DEFAULT_SEARCH);
@@ -109,7 +124,6 @@ export default function SchedulePage() {
           <h3 style={{ marginTop: 0 }}>
             Scheduling Conversation
           </h3>
-
           {conversation.map((message, index) => (
             <div
               key={`${message.role}-${index}`}
@@ -127,7 +141,6 @@ export default function SchedulePage() {
                   ? "CSR"
                   : "Denny"}
               </strong>
-
               <pre
                 style={{
                   marginTop: 8,
@@ -144,23 +157,21 @@ export default function SchedulePage() {
 
       <p style={{ marginTop: 0, fontWeight: 800 }}>
         {conversation.length === 0
-          ? "Enter the customer’s city or address:"
+          ? "Enter the customer’s ZIP code, city, or address:"
           : "Ask Denny a follow-up question:"}
       </p>
-
       <textarea
         className="den-textarea"
         value={input}
         placeholder={
           conversation.length === 0
-            ? "Example: Find the earliest three sales appointment options for a customer in Citrus Heights, CA."
-            : 'Try: "Why?" or "The customer needs three more options."'
+            ? "Find the earliest three sales appointment options for a customer in [ZIP code, city, or address]."
+            : 'Try: "Why?" or click "Next 3 Options" if the customer needs more choices.'
         }
         onChange={(event) =>
           setInput(event.target.value)
         }
       />
-
       <div
         style={{
           marginTop: 12,
@@ -180,6 +191,16 @@ export default function SchedulePage() {
               ? "Find Best Appointments"
               : "Ask Denny"}
         </button>
+
+        {hasAssistantReply && (
+          <button
+            onClick={nextThreeOptions}
+            className="den-link"
+            disabled={loading}
+          >
+            Next 3 Options
+          </button>
+        )}
 
         {conversation.length > 0 && (
           <button

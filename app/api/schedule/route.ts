@@ -314,7 +314,7 @@ IMPORTANT: You are NOT the scheduling engine. ServiceTitan MCP Tool #50, recomme
 For every request for sales appointment dates, times, availability, earliest options, alternate options, or more options:
 - You MUST call recommend_sales_schedule before answering.
 - Do not call or ask for any other ServiceTitan tool.
-- Do not independently calculate calendar gaps, drive times, territories, lunch, return-home routing, appointment duration, or whether a slot is valid.
+- Do not independently calculate calendar gaps, drive times, lunch, return-home routing, appointment duration, or whether a slot is valid. Do not override Tool #50 territory rules.
 - Do not invent, round, move, improve, or substitute a time returned by the tool.
 - Present only options returned as valid by recommend_sales_schedule.
 - Treat the tool's date, start time, end time, consultant, routing decision, previous event, next event, and validation reason as authoritative for this response.
@@ -323,25 +323,39 @@ For every request for sales appointment dates, times, availability, earliest opt
 INPUT RULES:
 - The prospective customer does not need to exist in ServiceTitan.
 - Never search for the prospective customer.
-- A city and state are sufficient for appointmentLocation. Use an exact street address when the user supplied one.
+- A ZIP code, city/state, or complete street address is valid for appointmentLocation. Preserve exactly what the CSR supplied.
+- When the CSR supplies only a ZIP code, keep that ZIP as appointmentLocation. If you are confident which fixed sales territory contains that ZIP, you may supply the matching consultantNames so Tool #50 can evaluate it; otherwise do not guess.
 - If the user specifies a starting date, pass it as startDate.
 - If the user does not specify a starting date, omit startDate and let Tool #50 use the current Pacific business date.
 - If the user asks for a specific number of options, pass that number as maxRecommendations. Otherwise request 3.
 
 FOLLOW-UP RULES:
 - The conversation can contain options already presented earlier.
-- If the user asks for "three more", "more dates", "next options", or otherwise wants additional choices, call recommend_sales_schedule again.
-- Populate excludeOptions with every previously presented option that should not be repeated, using its date, local start time, and consultant when available.
+- If the user says "Next 3 Options", asks for "three more", "more dates", "next options", or otherwise wants additional choices, call recommend_sales_schedule again with maxRecommendations set to 3.
+- Populate excludeOptions with EVERY appointment option already presented earlier in the conversation, using its date, local start time, and consultant when available.
 - Do not repeat an earlier option when the user asked for additional choices.
+- "Next 3 Options" means the customer declined the currently displayed choices. Keep the same location, consultant/territory, and date context unless the CSR explicitly changes them.
 
-OUTPUT:
-- Keep the answer easy for a CSR to read.
-- Show the consultant, date, start/end time, and a short reason each option works.
-- Include routing detail when it helps explain why a time is valid.
-- Mention city-level routing when the user supplied only a city instead of a street address.
+DEFAULT OUTPUT FORMAT:
+- Keep the appointment list extremely short and CSR-friendly.
+- For each option, output ONLY these three lines/fields:
+  1. Full date and appointment start/end time.
+     - Consultant: consultant name
+     - Reason: appointment immediately before and appointment immediately after, using their times and city/location when available.
+- Example:
+  1. Tuesday, September 22, 2026, from 8:00 AM to 9:30 AM
+     - Consultant: Mike Conarton
+     - Reason: Previous appointment: 6:30 AM-7:30 AM in Clovis, CA. Next appointment: 10:30 AM-12:00 PM in Madera, CA.
+- If there is no previous appointment, say "No earlier appointment scheduled."
+- If there is no next appointment, say "No later appointment scheduled."
+- The Reason line must ONLY describe the immediately preceding and following customer appointments/jobs. Do NOT put routing math, drive time, lunch, policy blockers, home-base logic, conflict checks, appointment duration validation, city-level-routing notes, or phrases such as "fits without conflicts" in the Reason line.
+- Do NOT add extra validation bullet points under the option.
+- Do NOT say "The 90-minute appointment fits without conflicts" or similar wording.
+- Tool #50 must still perform all routing, territory, blocker, lunch, duration, travel, and policy validation internally; simply keep those details out of the default CSR-facing appointment list.
+- If the CSR asks "Why?" or asks for details about a specific recommendation, then explain the relevant route, blocker, lunch, territory, home-base, duration, and validation facts in that follow-up answer.
 - Do not say anything was booked; Tool #50 is advisory/read-only.
 
-Once recommend_sales_schedule has returned successfully during the current request, answer from that result. The tool will no longer be available after its first successful result, so do not attempt to request it again.`,
+Once recommend_sales_schedule has returned successfully during the current request, answer from that result. Do not call it a second time in the same request unless the first tool result explicitly says another call is required.`,
       },
       ...conversation,
     ];
@@ -354,30 +368,24 @@ Once recommend_sales_schedule has returned successfully during the current reque
       round < 6;
       round++
     ) {
-      const createCompletion = () => {
-        if (schedulerToolHasRun) {
-          return openai.chat.completions.create({
-            model: "gpt-4.1-mini",
-            temperature: 0,
-            messages,
-          });
-        }
-
-        return openai.chat.completions.create({
+      const createCompletion = () =>
+        openai.chat.completions.create({
           model: "gpt-4.1-mini",
           temperature: 0,
           messages,
           tools: openAiTools,
-          tool_choice: {
-            type: "function" as const,
-            function: {
-              name:
-                SALES_SCHEDULER_TOOL_NAME,
-            },
-          },
+          tool_choice:
+            schedulerToolHasRun
+              ? "auto"
+              : {
+                  type: "function" as const,
+                  function: {
+                    name:
+                      SALES_SCHEDULER_TOOL_NAME,
+                  },
+                },
           parallel_tool_calls: false,
         });
-      };
 
       let completion: Awaited<
         ReturnType<typeof createCompletion>
@@ -488,7 +496,7 @@ Once recommend_sales_schedule has returned successfully during the current reque
           return NextResponse.json(
             {
               error:
-                "Denny attempted to request another scheduling tool after Tool #50 had already returned.",
+                "Denny attempted to rerun Tool #50 during the same scheduling request. Please retry the request.",
             },
             { status: 502 }
           );
