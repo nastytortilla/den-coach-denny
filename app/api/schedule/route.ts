@@ -111,6 +111,228 @@ function isNextThreeOptionsRequest(
   );
 }
 
+function latestUserMessage(
+  messages: ConversationMessage[]
+) {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    if (messages[index].role === "user") {
+      return messages[index].content;
+    }
+  }
+
+  return "";
+}
+
+function latestUserMessageContainsZip(
+  messages: ConversationMessage[]
+) {
+  return /\b\d{5}(?:-\d{4})?\b/.test(
+    latestUserMessage(messages)
+  );
+}
+
+function isExplanationFollowUp(
+  messages: ConversationMessage[]
+) {
+  const text = latestUserMessage(messages)
+    .trim()
+    .toLowerCase();
+
+  return /^(why|explain|how|show me why|show why|details|what made|what caused|what route|routing)/.test(
+    text
+  );
+}
+
+function extractSchedulerPayload(
+  toolResult: any
+) {
+  const content = Array.isArray(toolResult?.content)
+    ? toolResult.content
+    : [];
+
+  for (const item of content) {
+    if (item?.type !== "text" || typeof item?.text !== "string") {
+      continue;
+    }
+
+    try {
+      const parsed = JSON.parse(item.text);
+      if (parsed && typeof parsed === "object") {
+        return parsed as Record<string, any>;
+      }
+    } catch {
+      // Keep looking in case another text block contains the JSON payload.
+    }
+  }
+
+  return null;
+}
+
+function formatClockTime(
+  isoValue: unknown,
+  timeZone: string
+) {
+  if (typeof isoValue !== "string" || !isoValue) {
+    return null;
+  }
+
+  const date = new Date(isoValue);
+  if (!Number.isFinite(date.getTime())) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(date);
+}
+
+function formatOptionDate(
+  dateValue: unknown
+) {
+  if (typeof dateValue !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+    return String(dateValue || "Date unavailable");
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(`${dateValue}T12:00:00.000Z`));
+}
+
+function customerEventLocation(
+  event: any
+) {
+  const location = event?.location;
+
+  if (location && typeof location === "object") {
+    const city = String(location.city || "").trim();
+    const state = String(location.state || "").trim();
+
+    if (city && state) {
+      return `${city}, ${state}`;
+    }
+
+    if (city) {
+      return city;
+    }
+
+    const address = String(location.address || "").trim();
+    if (address) {
+      return address;
+    }
+  }
+
+  return null;
+}
+
+function summarizeCustomerAppointment(
+  event: any,
+  timeZone: string
+) {
+  if (!event) {
+    return null;
+  }
+
+  const start = formatClockTime(event.start, timeZone);
+  const end = formatClockTime(event.end, timeZone);
+  const location = customerEventLocation(event);
+
+  const timeText = start && end
+    ? `${start}-${end}`
+    : start || end || "time unavailable";
+
+  return location
+    ? `${timeText} in ${location}`
+    : timeText;
+}
+
+function toolConfirmsSalesServiceArea(
+  payload: any
+) {
+  const territoryConsultants = Array.isArray(
+    payload?.territoryResolution?.consultants
+  )
+    ? payload.territoryResolution.consultants
+    : Array.isArray(payload?.territoryConsultants)
+      ? payload.territoryConsultants
+      : [];
+
+  return territoryConsultants.length > 0;
+}
+
+function formatConciseSchedulerReply(
+  payload: any,
+  zipResolution: ZipResolution | null,
+  includeZipIntro: boolean
+) {
+  const options = Array.isArray(payload?.options)
+    ? payload.options
+    : [];
+
+  if (!options.length) {
+    return null;
+  }
+
+  const lines: string[] = [];
+
+  if (
+    includeZipIntro &&
+    zipResolution &&
+    toolConfirmsSalesServiceArea(payload)
+  ) {
+    lines.push(
+      `${zipResolution.zip} is ${zipResolution.city}, ${zipResolution.stateAbbreviation}, and it is in our service area.`
+    );
+    lines.push("");
+  }
+
+  options.forEach((option: any, index: number) => {
+    const timeZone = String(
+      option?.consultantTimeZone || "America/Los_Angeles"
+    );
+    const start = formatClockTime(option?.start, timeZone) || "start time unavailable";
+    const end = formatClockTime(option?.end, timeZone) || "end time unavailable";
+    const date = formatOptionDate(option?.date);
+    const consultant = String(option?.consultantName || "Consultant unavailable");
+
+    const previous = summarizeCustomerAppointment(
+      option?.precedingCustomerAppointment,
+      timeZone
+    );
+    const following = summarizeCustomerAppointment(
+      option?.followingCustomerAppointment,
+      timeZone
+    );
+
+    const reasonParts = [
+      previous
+        ? `Previous appointment: ${previous}.`
+        : "No earlier appointment scheduled.",
+      following
+        ? `Next appointment: ${following}.`
+        : "No later appointment scheduled.",
+    ];
+
+    lines.push(
+      `${index + 1}. ${date}, from ${start} to ${end}`
+    );
+    lines.push(`   - Consultant: ${consultant}`);
+    lines.push(`   - Reason: ${reasonParts.join(" ")}`);
+
+    if (index < options.length - 1) {
+      lines.push("");
+    }
+  });
+
+  return lines.join("\n");
+}
+
 function extractBareZipFromConversation(
   messages: ConversationMessage[]
 ) {
@@ -426,6 +648,12 @@ export async function POST(req: Request) {
       ? await resolveUsZip(bareZip)
       : null;
 
+    const zipWasEnteredThisTurn =
+      latestUserMessageContainsZip(conversation);
+
+    const explanationFollowUp =
+      isExplanationFollowUp(conversation);
+
     if (conversation.length === 0) {
       return NextResponse.json(
         {
@@ -543,12 +771,13 @@ DEFAULT OUTPUT FORMAT:
      - Reason: Previous appointment: 6:30 AM-7:30 AM in Clovis, CA. Next appointment: 10:30 AM-12:00 PM in Madera, CA.
 - If there is no previous appointment, say "No earlier appointment scheduled."
 - If there is no next appointment, say "No later appointment scheduled."
-- The Reason line must ONLY describe the immediately preceding and following customer appointments/jobs. Do NOT put routing math, drive time, lunch, policy blockers, home-base logic, conflict checks, appointment duration validation, city-level-routing notes, or phrases such as "fits without conflicts" in the Reason line.
+- The Reason line must ONLY describe the immediately preceding and following customer appointments/jobs. Use ONLY Tool #50 fields precedingCustomerAppointment and followingCustomerAppointment for the displayed Reason. NEVER use precedingCalendarItem or followingCalendarItem for the displayed Reason. Lunch, meetings, training, drive blocks, policy markers, and other non-job events must never appear as the previous/next appointment in the default CSR output. Do NOT put routing math, drive time, lunch, policy blockers, home-base logic, conflict checks, appointment duration validation, city-level-routing notes, or phrases such as "fits without conflicts" in the Reason line.
 - Do NOT add extra validation bullet points under the option.
 - Do NOT say "The 90-minute appointment fits without conflicts" or similar wording.
 - Tool #50 must still perform all routing, territory, blocker, lunch, duration, travel, and policy validation internally; simply keep those details out of the default CSR-facing appointment list.
 - If the CSR asks "Why?" or asks for details about a specific recommendation, then explain the relevant route, blocker, lunch, territory, home-base, duration, and validation facts in that follow-up answer.
 - Do not say anything was booked; Tool #50 is advisory/read-only.
+- When the CURRENT CSR message contains a ZIP code and server ZIP resolution is available, and Tool #50 confirms the location maps to a sales territory, begin the first answer with exactly one short sentence identifying the ZIP's city/state and saying it is in our service area. Do not repeat that sentence on Next 3 Options or later follow-ups.
 
 Once recommend_sales_schedule has returned successfully during the current request, answer from that result. Do not call it a second time in the same request unless the first tool result explicitly says another call is required.`,
       },
@@ -806,6 +1035,24 @@ Once recommend_sales_schedule has returned successfully during the current reque
           toolResultText.length;
 
         schedulerToolHasRun = true;
+
+        const schedulerPayload =
+          extractSchedulerPayload(toolResult);
+
+        if (!explanationFollowUp && schedulerPayload) {
+          const conciseReply =
+            formatConciseSchedulerReply(
+              schedulerPayload,
+              zipResolution,
+              zipWasEnteredThisTurn
+            );
+
+          if (conciseReply) {
+            return NextResponse.json({
+              reply: conciseReply,
+            });
+          }
+        }
 
         messages.push({
           role: "tool",
