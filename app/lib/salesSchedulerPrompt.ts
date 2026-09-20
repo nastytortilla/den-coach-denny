@@ -143,8 +143,10 @@ Mike Conarton:
 - Mike covers all of Arizona.
 - Mike covers the Las Vegas area within approximately 30 miles.
 - Check his event blockers and non-job events carefully.
-- If his ServiceTitan calendar has an event showing that he is covering the Fresno area, he may temporarily cover locations in the normal Ross P and Nick Rendon territories.
-- Do not assume Fresno coverage unless a live event or blocker supports it.
+- The exact ServiceTitan policy marker "FRESNO / BAKERSFIELD AREA" means Mike is temporarily working the normal Ross P and Nick Rendon territory on every overlapping date.
+- On those dates Mike is the PRIMARY sales rep for the Ross/Nick territory. Ross P and Nick Rendon are fallback choices only when Mike has no valid option, unless the CSR explicitly asks for Ross or Nick.
+- While that marker is active, NEVER route Mike from his permanent Mesa, Arizona home base for California coverage. Use his actual preceding customer appointment when one exists. If there is no preceding customer stop, treat the live blocker as proof that Mike is already in the Fresno/Bakersfield coverage region and do not invent a Mesa-to-California route.
+- Do not assume this temporary California coverage unless the live FRESNO / BAKERSFIELD AREA marker supports the date.
 
 Jarret Beck:
 
@@ -176,7 +178,11 @@ Ross P:
 - Every city and location reasonably inside this perimeter is eligible for Ross.
 - Ross is also an installer.
 - Check his complete schedule, including sales appointments, installation jobs, non-job events, and event blockers.
-- If his calendar shows that he is assigned to Oregon or Washington for a particular week, he may cover sales appointments there during that period.
+- The exact ServiceTitan policy marker "WASHINGTON / OREGON" means Ross is on a temporary Northwest work trip and may take both sales and installation work there during the covered dates.
+- Trip direction is Washington first, then south into Oregon. Washington sales/install work is preferred Monday and Tuesday and may continue into Wednesday. After Washington work has occurred, the route should progress south into Oregon for the remainder of the week.
+- Never recommend Oregon sales/install work before live Washington sales or installation work exists earlier in that same Monday-Friday coverage week.
+- While the WASHINGTON / OREGON marker is active, do not route Ross's first temporary-trip stop from his permanent Lemoore home base. Use actual prior customer stops as the trip progresses; if there is no prior stop, the live blocker establishes that Ross is already on the temporary trip.
+- If a Ross blocker says "Drive home", that date is a hard no-work travel day. Do not recommend a sales appointment or install on that date.
 - Do not assume Oregon or Washington coverage without a supporting live event or blocker.
 
 HARD SCHEDULING HOURS
@@ -243,8 +249,9 @@ Recognized policy-marker examples that are NOT full-span occupied time:
 
 - "4 APPTS MAX" or another "# APPTS MAX" marker: enforce the daily appointment maximum instead of blocking the whole day.
 - "HOME BY 5PM" or another "HOME BY <time>" marker: verify the consultant can complete the final customer stop and drive home by the stated deadline; do not block the entire marker span.
-- Mike Conarton "Fresno Area" coverage markers: treat as temporary territory guidance on the overlapping date(s), not occupied time.
-- Ross P Oregon or Washington coverage markers: treat as temporary territory guidance on the overlapping date(s), not occupied time.
+- Mike Conarton "FRESNO / BAKERSFIELD AREA": treat as a temporary primary-coverage policy for normal Ross P / Nick Rendon territory, not occupied time; never use Mesa as the California temporary-coverage routing origin.
+- Ross P "WASHINGTON / OREGON": treat as a temporary work-trip policy, not occupied time; Washington work must come before Oregon work.
+- Ross P "Drive home": treat as a hard no-work travel day.
 - Unknown non-job events or blockers remain occupied time until their meaning is explicitly mapped.
 
 Rules:
