@@ -341,7 +341,7 @@ OUTPUT:
 - Mention city-level routing when the user supplied only a city instead of a street address.
 - Do not say anything was booked; Tool #50 is advisory/read-only.
 
-Once recommend_sales_schedule has returned successfully during the current request, answer from that result. Do not call it a second time in the same request unless the first tool result explicitly says another call is required.`,
+Once recommend_sales_schedule has returned successfully during the current request, answer from that result. The tool will no longer be available after its first successful result, so do not attempt to request it again.`,
       },
       ...conversation,
     ];
@@ -354,24 +354,30 @@ Once recommend_sales_schedule has returned successfully during the current reque
       round < 6;
       round++
     ) {
-      const createCompletion = () =>
-        openai.chat.completions.create({
+      const createCompletion = () => {
+        if (schedulerToolHasRun) {
+          return openai.chat.completions.create({
+            model: "gpt-4.1-mini",
+            temperature: 0,
+            messages,
+          });
+        }
+
+        return openai.chat.completions.create({
           model: "gpt-4.1-mini",
           temperature: 0,
           messages,
           tools: openAiTools,
-          tool_choice:
-            schedulerToolHasRun
-              ? "auto"
-              : {
-                  type: "function" as const,
-                  function: {
-                    name:
-                      SALES_SCHEDULER_TOOL_NAME,
-                  },
-                },
+          tool_choice: {
+            type: "function" as const,
+            function: {
+              name:
+                SALES_SCHEDULER_TOOL_NAME,
+            },
+          },
           parallel_tool_calls: false,
         });
+      };
 
       let completion: Awaited<
         ReturnType<typeof createCompletion>
@@ -482,7 +488,7 @@ Once recommend_sales_schedule has returned successfully during the current reque
           return NextResponse.json(
             {
               error:
-                "Denny attempted to rerun Tool #50 during the same scheduling request. Please retry the request.",
+                "Denny attempted to request another scheduling tool after Tool #50 had already returned.",
             },
             { status: 502 }
           );
