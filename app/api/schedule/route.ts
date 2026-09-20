@@ -12,10 +12,17 @@ type ConversationMessage = {
   content: string;
 };
 
+type McpTool = {
+  name: string;
+  description?: string;
+  inputSchema: unknown;
+};
+
 const MAX_CONVERSATION_CHARACTERS = 30000;
 const MAX_MESSAGE_CHARACTERS = 6000;
 const MAX_SINGLE_TOOL_RESULT = 30000;
-const MAX_TOTAL_TOOL_RESULTS = 150000;
+const MAX_TOTAL_TOOL_RESULTS = 120000;
+const MAX_OPENAI_RETRIES = 5;
 
 function formatMcpResult(
   result: unknown,
@@ -72,6 +79,65 @@ function isBlockedCustomerLookupTool(
     normalizedName.includes("location_search") ||
     normalizedName.includes("search_location") ||
     normalizedName.includes("location_details")
+  );
+}
+
+function isSchedulingTool(tool: McpTool) {
+  const searchableText = `${
+    tool.name
+  } ${tool.description || ""}`.toLowerCase();
+
+  const excludedTerms = [
+    "invoice",
+    "estimate",
+    "payment",
+    "pricebook",
+    "inventory",
+    "purchase order",
+    "project details",
+    "project history",
+    "customer history",
+    "customer search",
+    "call recording",
+    "transcript",
+    "upload",
+    "marketing",
+    "membership",
+    "equipment",
+    "material",
+  ];
+
+  if (
+    excludedTerms.some((term) =>
+      searchableText.includes(term)
+    )
+  ) {
+    return false;
+  }
+
+  const schedulingTerms = [
+    "schedule",
+    "scheduling",
+    "calendar",
+    "appointment",
+    "availability",
+    "technician",
+    "employee roster",
+    "sales consultant",
+    "non-job",
+    "non job",
+    "event block",
+    "blocker",
+    "business time",
+    "route",
+    "routing",
+    "drive time",
+    "travel time",
+    "distance",
+  ];
+
+  return schedulingTerms.some((term) =>
+    searchableText.includes(term)
   );
 }
 
@@ -155,6 +221,65 @@ function getConversationMessages(
   ];
 }
 
+function getRetryDelayMilliseconds(
+  error: any,
+  attempt: number
+) {
+  const message =
+    error?.message || String(error);
+
+  const secondsMatch = message.match(
+    /try again in ([\d.]+)s/i
+  );
+
+  if (secondsMatch) {
+    const seconds =
+      Number(secondsMatch[1]);
+
+    if (Number.isFinite(seconds)) {
+      return Math.min(
+        30000,
+        Math.max(
+          1500,
+          Math.ceil(seconds * 1000) + 1000
+        )
+      );
+    }
+  }
+
+  const millisecondsMatch = message.match(
+    /try again in ([\d.]+)ms/i
+  );
+
+  if (millisecondsMatch) {
+    const milliseconds =
+      Number(millisecondsMatch[1]);
+
+    if (
+      Number.isFinite(milliseconds)
+    ) {
+      return Math.min(
+        30000,
+        Math.max(
+          1500,
+          Math.ceil(milliseconds) + 1000
+        )
+      );
+    }
+  }
+
+  return Math.min(
+    30000,
+    3000 * (attempt + 1)
+  );
+}
+
+function wait(milliseconds: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+}
+
 export async function POST(req: Request) {
   let mcpClient: Awaited<
     ReturnType<typeof connectServiceTitanMcp>
@@ -226,7 +351,8 @@ export async function POST(req: Request) {
         (tool) =>
           !isBlockedCustomerLookupTool(
             tool.name
-          )
+          ) &&
+          isSchedulingTool(tool as McpTool)
       );
 
     const openAiTools =
@@ -263,7 +389,7 @@ export async function POST(req: Request) {
         role: "system",
         content: `${getSalesSchedulerPrompt()}
 
-You have access to live ServiceTitan MCP tools.
+You have access to live ServiceTitan MCP scheduling and routing tools.
 
 IMPORTANT TOOL RESTRICTIONS:
 
@@ -282,11 +408,11 @@ CALENDAR RESEARCH REQUIREMENTS:
 
 - Read every returned appointment, Opportunity, DRM block, job, lunch, non-job event, and event blocker.
 - Do not treat a calendar block as available time.
-- Do not say a consultant has no nearby appointments unless the live schedule data supports that statement.
-- When routing a later appointment, use the preceding appointment's location as the origin.
-- Only use the consultant's home as the origin for the first appointment of a route segment.
+- Do not say a consultant has no nearby appointments unless live schedule data supports it.
+- When routing a later appointment, use the preceding appointment location as the origin.
+- Only use home as the origin for the first appointment of a route segment.
 - A later appointment may begin a new route segment only when there is enough time to return home first.
-- Eli R's sales consultations last exactly 1 hour.
+- Eli R's consultations last exactly 1 hour.
 - Do not change Eli's duration to 1 hour and 30 minutes.
 
 This route is only for sales appointment placement.
@@ -294,9 +420,7 @@ Do not apply installer scheduling rules.
 
 The conversation may contain earlier recommendations and follow-up questions. Preserve that context.
 
-If the user asks for three more options, exclude the options already presented and use live consultant schedule data to find the next three valid choices.
-
-Tool results may be shortened when ServiceTitan returns excessive data. Use the relevant data that is available. If something cannot be verified, clearly say what still needs confirmation.
+If the user asks for three more options, exclude options already presented and use live schedule data to find the next three valid choices.
 
 Never claim that ServiceTitan or Google Routes was checked unless the appropriate tool was actually used.`,
       },
@@ -310,17 +434,62 @@ Never claim that ServiceTitan or Google Routes was checked unless the appropriat
       round < 12;
       round++
     ) {
-      const completion =
-        await openai.chat.completions.create(
-          {
-            model: "gpt-4.1",
-            temperature: 0.1,
-            messages,
-            tools: openAiTools,
-            tool_choice: "auto",
-            parallel_tool_calls: false,
+      const createCompletion = () =>
+        openai.chat.completions.create({
+          model: "gpt-4.1-mini",
+          temperature: 0.1,
+          messages,
+          tools: openAiTools,
+          tool_choice: "auto",
+          parallel_tool_calls: false,
+        });
+
+      let completion: Awaited<
+        ReturnType<typeof createCompletion>
+      > | null = null;
+
+      for (
+        let attempt = 0;
+        attempt < MAX_OPENAI_RETRIES;
+        attempt++
+      ) {
+        try {
+          completion =
+            await createCompletion();
+
+          break;
+        } catch (error: any) {
+          const status =
+            error?.status ||
+            error?.statusCode;
+
+          if (
+            status !== 429 ||
+            attempt ===
+              MAX_OPENAI_RETRIES - 1
+          ) {
+            throw error;
           }
+
+          const delay =
+            getRetryDelayMilliseconds(
+              error,
+              attempt
+            );
+
+          await wait(delay);
+        }
+      }
+
+      if (!completion) {
+        return NextResponse.json(
+          {
+            error:
+              "OpenAI did not complete the scheduling request after retrying.",
+          },
+          { status: 429 }
         );
+      }
 
       const message =
         completion.choices?.[0]?.message;
