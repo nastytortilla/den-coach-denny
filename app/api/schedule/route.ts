@@ -26,6 +26,175 @@ const MAX_SINGLE_TOOL_RESULT = 60000;
 const MAX_TOTAL_TOOL_RESULTS = 120000;
 const MAX_OPENAI_RETRIES = 5;
 
+const MONTH_NUMBER: Record<string, string> = {
+  january: "01",
+  february: "02",
+  march: "03",
+  april: "04",
+  may: "05",
+  june: "06",
+  july: "07",
+  august: "08",
+  september: "09",
+  october: "10",
+  november: "11",
+  december: "12",
+};
+
+type ZipResolution = {
+  zip: string;
+  city: string;
+  state: string;
+  stateAbbreviation: string;
+  latitude?: string;
+  longitude?: string;
+};
+
+function addDateOnlyDays(
+  dateString: string,
+  days: number
+) {
+  const date = new Date(
+    `${dateString}T12:00:00.000Z`
+  );
+
+  date.setUTCDate(
+    date.getUTCDate() + days
+  );
+
+  return date.toISOString().slice(0, 10);
+}
+
+function latestPresentedOptionDate(
+  messages: ConversationMessage[]
+) {
+  let latest: string | null = null;
+
+  const pattern =
+    /\b(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),\s+(\d{4})\b/gi;
+
+  for (const message of messages) {
+    pattern.lastIndex = 0;
+
+    if (message.role !== "assistant") {
+      continue;
+    }
+
+    let match: RegExpExecArray | null;
+
+    while ((match = pattern.exec(message.content))) {
+      const month =
+        MONTH_NUMBER[match[1].toLowerCase()];
+      const day = match[2].padStart(2, "0");
+      const date = `${match[3]}-${month}-${day}`;
+
+      if (!latest || date > latest) {
+        latest = date;
+      }
+    }
+  }
+
+  return latest;
+}
+
+function isNextThreeOptionsRequest(
+  messages: ConversationMessage[]
+) {
+  const last = messages[messages.length - 1];
+
+  if (!last || last.role !== "user") {
+    return false;
+  }
+
+  return /^next\s*3\s*options[.!]?$/i.test(
+    last.content.trim()
+  );
+}
+
+function extractBareZipFromConversation(
+  messages: ConversationMessage[]
+) {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index];
+
+    if (message.role !== "user") {
+      continue;
+    }
+
+    const match = message.content.match(
+      /\b(\d{5})(?:-\d{4})?\b/
+    );
+
+    if (match) {
+      return match[1];
+    }
+  }
+
+  return null;
+}
+
+async function resolveUsZip(
+  zip: string
+): Promise<ZipResolution | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    5000
+  );
+
+  try {
+    const response = await fetch(
+      `https://api.zippopotam.us/us/${encodeURIComponent(zip)}`,
+      {
+        signal: controller.signal,
+        cache: "no-store",
+      }
+    );
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload: any = await response.json();
+    const place = Array.isArray(payload?.places)
+      ? payload.places[0]
+      : null;
+
+    const city = String(
+      place?.["place name"] || ""
+    ).trim();
+    const state = String(
+      place?.state || ""
+    ).trim();
+    const stateAbbreviation = String(
+      place?.["state abbreviation"] || ""
+    ).trim();
+
+    if (!city || !stateAbbreviation) {
+      return null;
+    }
+
+    return {
+      zip,
+      city,
+      state,
+      stateAbbreviation,
+      latitude:
+        place?.latitude !== undefined
+          ? String(place.latitude)
+          : undefined,
+      longitude:
+        place?.longitude !== undefined
+          ? String(place.longitude)
+          : undefined,
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function formatMcpResult(
   result: unknown,
   maximumLength = MAX_SINGLE_TOOL_RESULT
@@ -233,6 +402,30 @@ export async function POST(req: Request) {
     const conversation =
       getConversationMessages(body);
 
+    const nextThreeRequest =
+      isNextThreeOptionsRequest(conversation);
+
+    const latestShownDate =
+      nextThreeRequest
+        ? latestPresentedOptionDate(
+            conversation.slice(0, -1)
+          )
+        : null;
+
+    const nextThreeStartDate =
+      latestShownDate
+        ? addDateOnlyDays(latestShownDate, 1)
+        : null;
+
+    const bareZip =
+      extractBareZipFromConversation(
+        conversation
+      );
+
+    const zipResolution = bareZip
+      ? await resolveUsZip(bareZip)
+      : null;
+
     if (conversation.length === 0) {
       return NextResponse.json(
         {
@@ -323,8 +516,9 @@ For every request for sales appointment dates, times, availability, earliest opt
 INPUT RULES:
 - The prospective customer does not need to exist in ServiceTitan.
 - Never search for the prospective customer.
-- A ZIP code, city/state, or complete street address is valid for appointmentLocation. Preserve exactly what the CSR supplied.
-- When the CSR supplies only a ZIP code, keep that ZIP as appointmentLocation. If you are confident which fixed sales territory contains that ZIP, you may supply the matching consultantNames so Tool #50 can evaluate it; otherwise do not guess.
+- A ZIP code, city/state, or complete street address is valid for appointmentLocation.
+- A bare U.S. ZIP code is resolved server-side to its USPS/GeoNames city and state before Tool #50 runs. Do NOT ask the CSR to choose a consultant just because the original input was only a ZIP code.
+- When ZIP resolution is available, use the resolved ZIP + city + state as appointmentLocation so Tool #50 can apply its normal territory resolver. Do not invent a different city or state.
 - If the user specifies a starting date, pass it as startDate.
 - If the user does not specify a starting date, omit startDate and let Tool #50 use the current Pacific business date.
 - If the user asks for a specific number of options, pass that number as maxRecommendations. Otherwise request 3.
@@ -334,7 +528,8 @@ FOLLOW-UP RULES:
 - If the user says "Next 3 Options", asks for "three more", "more dates", "next options", or otherwise wants additional choices, call recommend_sales_schedule again with maxRecommendations set to 3.
 - Populate excludeOptions with EVERY appointment option already presented earlier in the conversation, using its date, local start time, and consultant when available.
 - Do not repeat an earlier option when the user asked for additional choices.
-- "Next 3 Options" means the customer declined the currently displayed choices. Keep the same location, consultant/territory, and date context unless the CSR explicitly changes them.
+- "Next 3 Options" means the customer declined the currently displayed choices. Keep the same location and consultant/territory unless the CSR explicitly changes them.
+- For the exact "Next 3 Options" button request, start the new search on the calendar day AFTER the latest appointment date already displayed. This intentionally returns choices on later dates instead of sliding the same day's option by 15 minutes.
 
 DEFAULT OUTPUT FORMAT:
 - Keep the appointment list extremely short and CSR-friendly.
@@ -357,6 +552,22 @@ DEFAULT OUTPUT FORMAT:
 
 Once recommend_sales_schedule has returned successfully during the current request, answer from that result. Do not call it a second time in the same request unless the first tool result explicitly says another call is required.`,
       },
+      ...(zipResolution
+        ? [
+            {
+              role: "system",
+              content: `SERVER ZIP RESOLUTION: ${zipResolution.zip} resolves to ${zipResolution.city}, ${zipResolution.stateAbbreviation}. For Tool #50 use appointmentLocation "${zipResolution.zip}, ${zipResolution.city}, ${zipResolution.stateAbbreviation}". Do not ask the CSR to choose a sales consultant merely because the original input was a ZIP code.`,
+            },
+          ]
+        : []),
+      ...(nextThreeStartDate
+        ? [
+            {
+              role: "system",
+              content: `NEXT 3 OPTIONS OVERRIDE: The latest appointment date already shown is ${latestShownDate}. For this button request, call Tool #50 with startDate=${nextThreeStartDate} and maxRecommendations=3. Keep the same customer location and territory/consultant context. Do not return another time on any previously displayed date.`,
+            },
+          ]
+        : []),
       ...conversation,
     ];
 
@@ -514,6 +725,31 @@ Once recommend_sales_schedule has returned successfully during the current reque
           );
         } catch {
           toolArguments = {};
+        }
+
+        if (zipResolution) {
+          const requestedLocation = String(
+            toolArguments.appointmentLocation ||
+              ""
+          ).trim();
+
+          if (
+            !requestedLocation ||
+            /^\d{5}(?:-\d{4})?$/.test(
+              requestedLocation
+            ) ||
+            requestedLocation === zipResolution.zip
+          ) {
+            toolArguments.appointmentLocation =
+              `${zipResolution.zip}, ${zipResolution.city}, ${zipResolution.stateAbbreviation}`;
+          }
+        }
+
+        if (nextThreeStartDate) {
+          toolArguments.startDate =
+            nextThreeStartDate;
+          toolArguments.maxRecommendations = 3;
+          delete toolArguments.endDate;
         }
 
         const toolResult =
