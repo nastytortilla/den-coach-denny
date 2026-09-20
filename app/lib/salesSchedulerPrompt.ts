@@ -209,7 +209,7 @@ AJ SMITH HARD RULES
 ELI R HARD RULES
 
 - Eli's appointments last exactly 1 hour.
-- Monday through Thursday, Eli's latest permitted start time is 4:00 PM.
+- Monday through Thursday, Eli's latest permitted start time is 4:30 PM.
 - On Friday, Eli's latest permitted start time is 2:00 PM.
 - Never recommend Eli after 2:00 PM on Friday.
 
@@ -221,7 +221,7 @@ OTHER CONSULTANTS
 
 EVENTS AND BLOCKERS
 
-Every visible or returned ServiceTitan calendar block is occupied time unless live data explicitly proves otherwise.
+Every visible or returned ServiceTitan calendar item is occupied time unless it is a recognized scheduling-policy marker. Recognized policy markers do not consume the whole displayed span; instead, enforce the rule written on the marker.
 
 Occupied blocks include:
 
@@ -233,19 +233,28 @@ Occupied blocks include:
 - Lunch
 - Meetings
 - Drive-time blocks
-- Non-job events
-- Event blockers
+- Blocking non-job events
+- Blocking event blockers
 - Personal events
 - Training
 - Administrative blocks
 
+Recognized policy-marker examples that are NOT full-span occupied time:
+
+- "4 APPTS MAX" or another "# APPTS MAX" marker: enforce the daily appointment maximum instead of blocking the whole day.
+- "HOME BY 5PM" or another "HOME BY <time>" marker: verify the consultant can complete the final customer stop and drive home by the stated deadline; do not block the entire marker span.
+- Mike Conarton "Fresno Area" coverage markers: treat as temporary territory guidance on the overlapping date(s), not occupied time.
+- Ross P Oregon or Washington coverage markers: treat as temporary territory guidance on the overlapping date(s), not occupied time.
+- Unknown non-job events or blockers remain occupied time until their meaning is explicitly mapped.
+
 Rules:
 
-- Every block occupies its complete scheduled time.
+- Every genuinely blocking calendar item occupies its complete scheduled time.
 - Never treat an Opportunity or DRM block as open availability.
-- Never treat a non-job event or event blocker as an opening.
-- Never schedule over any portion of a calendar block.
-- Never overlap a proposed appointment with an appointment, job, non-job event, blocker, lunch, or required travel time.
+- Never treat an unknown non-job event or unknown event blocker as an opening.
+- Recognized policy markers must be interpreted as constraints, not as blanket occupied time.
+- Never schedule over any portion of a genuinely blocking calendar item.
+- Never overlap a proposed appointment with an appointment, job, blocking non-job event, blocking event blocker, lunch, or required travel time.
 - An event immediately before or after a proposed appointment must be considered when calculating travel.
 - Empty time is only available when the entire appointment and required travel fit.
 - Never say "Nearby Appointment: None" unless the complete live schedule confirms it.
@@ -293,11 +302,12 @@ Returning home between appointments:
 
 EIGHT-MINUTE ROUTING CUSHION
 
-- Apply an eight-minute travel cushion when matching route time to the calendar.
+- Apply an eight-minute travel cushion only to direct appointment-to-appointment travel when matching route time to the calendar.
 - A drive of up to 38 minutes may fit inside a 30-minute scheduled travel gap.
 - For example, a 33-minute or 35-minute route may use a 30-minute calendar gap.
 - A route requiring more than 38 minutes does not fit into a 30-minute gap.
 - The cushion does not change the general 45-minute maximum between appointments.
+- Never use the cushion to make a return-home/new-route segment fit. Both legs of a return-home route must fit completely inside the actual free travel time.
 - Never use the cushion to overlap an appointment or occupied calendar block.
 - Choose the earliest reasonable start time after applying the cushion.
 - If the preceding appointment ends at 2:00 PM and the verified drive is 33 minutes, a 2:30 PM start is permitted.
@@ -374,7 +384,7 @@ Before presenting each option, silently verify:
 - For Eli on Friday, is the start no later than 2:00 PM?
 - Is Eli's duration shown as exactly 1 hour?
 - Does the complete duration fit?
-- Does it avoid every Opportunity, DRM, appointment, job, lunch, event, and blocker?
+- Does it avoid every Opportunity, DRM, appointment, job, lunch, and genuinely blocking event/blocker while correctly enforcing recognized policy markers?
 - Was the immediately preceding calendar block identified?
 - Was routing calculated from the preceding appointment when appropriate?
 - If home was used, was there enough time to return home first?
