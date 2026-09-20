@@ -14,8 +14,8 @@ type ConversationMessage = {
 
 const MAX_CONVERSATION_CHARACTERS = 30000;
 const MAX_MESSAGE_CHARACTERS = 6000;
-const MAX_SINGLE_TOOL_RESULT = 12000;
-const MAX_TOTAL_TOOL_RESULTS = 60000;
+const MAX_SINGLE_TOOL_RESULT = 30000;
+const MAX_TOTAL_TOOL_RESULTS = 150000;
 
 function formatMcpResult(
   result: unknown,
@@ -38,8 +38,13 @@ function formatMcpResult(
     return text;
   }
 
-  const endingLength = Math.min(2000, Math.floor(maximumLength / 4));
-  const beginningLength = maximumLength - endingLength;
+  const endingLength = Math.min(
+    4000,
+    Math.floor(maximumLength / 4)
+  );
+
+  const beginningLength =
+    maximumLength - endingLength;
 
   return `${text.slice(0, beginningLength)}
 
@@ -48,8 +53,11 @@ function formatMcpResult(
 ${text.slice(-endingLength)}`;
 }
 
-function isBlockedCustomerLookupTool(toolName: string) {
-  const normalizedName = toolName.toLowerCase();
+function isBlockedCustomerLookupTool(
+  toolName: string
+) {
+  const normalizedName =
+    toolName.toLowerCase();
 
   if (
     normalizedName.includes("route") ||
@@ -88,26 +96,33 @@ function getConversationMessages(
             .slice(0, MAX_MESSAGE_CHARACTERS),
         }));
 
-    const selectedMessages: ConversationMessage[] = [];
+    const selectedMessages: ConversationMessage[] =
+      [];
+
     let totalCharacters = 0;
 
     for (
-      let index = sanitizedMessages.length - 1;
+      let index =
+        sanitizedMessages.length - 1;
       index >= 0;
       index--
     ) {
-      const message = sanitizedMessages[index];
+      const message =
+        sanitizedMessages[index];
+
       const remainingCharacters =
-        MAX_CONVERSATION_CHARACTERS - totalCharacters;
+        MAX_CONVERSATION_CHARACTERS -
+        totalCharacters;
 
       if (remainingCharacters <= 0) {
         break;
       }
 
-      const content = message.content.slice(
-        0,
-        remainingCharacters
-      );
+      const content =
+        message.content.slice(
+          0,
+          remainingCharacters
+        );
 
       selectedMessages.unshift({
         role: message.role,
@@ -155,7 +170,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey =
+      process.env.OPENAI_API_KEY;
 
     if (!apiKey) {
       return NextResponse.json(
@@ -173,7 +189,10 @@ export async function POST(req: Request) {
 
     if (conversation.length === 0) {
       return NextResponse.json(
-        { error: "Missing conversation input" },
+        {
+          error:
+            "Missing conversation input",
+        },
         { status: 400 }
       );
     }
@@ -181,7 +200,8 @@ export async function POST(req: Request) {
     const tokenResponse =
       await auth0.getAccessToken();
 
-    const accessToken = tokenResponse.token;
+    const accessToken =
+      tokenResponse.token;
 
     if (!accessToken) {
       return NextResponse.json(
@@ -194,7 +214,9 @@ export async function POST(req: Request) {
     }
 
     mcpClient =
-      await connectServiceTitanMcp(accessToken);
+      await connectServiceTitanMcp(
+        accessToken
+      );
 
     const mcpToolList =
       await mcpClient.listTools();
@@ -202,11 +224,13 @@ export async function POST(req: Request) {
     const permittedTools =
       mcpToolList.tools.filter(
         (tool) =>
-          !isBlockedCustomerLookupTool(tool.name)
+          !isBlockedCustomerLookupTool(
+            tool.name
+          )
       );
 
-    const openAiTools = permittedTools.map(
-      (tool) => ({
+    const openAiTools =
+      permittedTools.map((tool) => ({
         type: "function" as const,
         function: {
           name: tool.name,
@@ -219,8 +243,7 @@ export async function POST(req: Request) {
               unknown
             >,
         },
-      })
-    );
+      }));
 
     if (openAiTools.length === 0) {
       return NextResponse.json(
@@ -232,7 +255,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const openai = new OpenAI({ apiKey });
+    const openai =
+      new OpenAI({ apiKey });
 
     const messages: any[] = [
       {
@@ -254,6 +278,17 @@ IMPORTANT TOOL RESTRICTIONS:
 - If only a city is supplied, perform a city-level routing estimate.
 - Never require a complete street address before returning appointment options.
 
+CALENDAR RESEARCH REQUIREMENTS:
+
+- Read every returned appointment, Opportunity, DRM block, job, lunch, non-job event, and event blocker.
+- Do not treat a calendar block as available time.
+- Do not say a consultant has no nearby appointments unless the live schedule data supports that statement.
+- When routing a later appointment, use the preceding appointment's location as the origin.
+- Only use the consultant's home as the origin for the first appointment of a route segment.
+- A later appointment may begin a new route segment only when there is enough time to return home first.
+- Eli R's sales consultations last exactly 1 hour.
+- Do not change Eli's duration to 1 hour and 30 minutes.
+
 This route is only for sales appointment placement.
 Do not apply installer scheduling rules.
 
@@ -261,7 +296,7 @@ The conversation may contain earlier recommendations and follow-up questions. Pr
 
 If the user asks for three more options, exclude the options already presented and use live consultant schedule data to find the next three valid choices.
 
-Tool results may be shortened when ServiceTitan returns excessive data. Use the relevant data that is available. If something cannot be verified from the shortened result, clearly say what still needs confirmation.
+Tool results may be shortened when ServiceTitan returns excessive data. Use the relevant data that is available. If something cannot be verified, clearly say what still needs confirmation.
 
 Never claim that ServiceTitan or Google Routes was checked unless the appropriate tool was actually used.`,
       },
@@ -270,16 +305,22 @@ Never claim that ServiceTitan or Google Routes was checked unless the appropriat
 
     let totalToolResultCharacters = 0;
 
-    for (let round = 0; round < 12; round++) {
+    for (
+      let round = 0;
+      round < 12;
+      round++
+    ) {
       const completion =
-        await openai.chat.completions.create({
-          model: "gpt-4o-mini",
-          temperature: 0.2,
-          messages,
-          tools: openAiTools,
-          tool_choice: "auto",
-          parallel_tool_calls: false,
-        });
+        await openai.chat.completions.create(
+          {
+            model: "gpt-4.1",
+            temperature: 0.1,
+            messages,
+            tools: openAiTools,
+            tool_choice: "auto",
+            parallel_tool_calls: false,
+          }
+        );
 
       const message =
         completion.choices?.[0]?.message;
@@ -304,11 +345,15 @@ Never claim that ServiceTitan or Google Routes was checked unless the appropriat
           message.content?.trim() ||
           "No reply returned.";
 
-        return NextResponse.json({ reply });
+        return NextResponse.json({
+          reply,
+        });
       }
 
       for (const toolCall of toolCalls) {
-        if (toolCall.type !== "function") {
+        if (
+          toolCall.type !== "function"
+        ) {
           continue;
         }
 
@@ -319,7 +364,8 @@ Never claim that ServiceTitan or Google Routes was checked unless the appropriat
 
         try {
           toolArguments = JSON.parse(
-            toolCall.function.arguments || "{}"
+            toolCall.function.arguments ||
+              "{}"
           );
         } catch {
           toolArguments = {};
@@ -328,7 +374,8 @@ Never claim that ServiceTitan or Google Routes was checked unless the appropriat
         const toolResult =
           await mcpClient.callTool(
             {
-              name: toolCall.function.name,
+              name:
+                toolCall.function.name,
               arguments: toolArguments,
             },
             {
@@ -358,10 +405,14 @@ Never claim that ServiceTitan or Google Routes was checked unless the appropriat
           MAX_TOTAL_TOOL_RESULTS -
           totalToolResultCharacters;
 
-        const allowedResultLength = Math.min(
-          MAX_SINGLE_TOOL_RESULT,
-          Math.max(0, remainingToolCharacters)
-        );
+        const allowedResultLength =
+          Math.min(
+            MAX_SINGLE_TOOL_RESULT,
+            Math.max(
+              0,
+              remainingToolCharacters
+            )
+          );
 
         const toolResultText =
           formatMcpResult(
@@ -388,7 +439,9 @@ Never claim that ServiceTitan or Google Routes was checked unless the appropriat
       { status: 500 }
     );
   } catch (error: any) {
-    const status = error?.status || 500;
+    const status =
+      error?.status || 500;
+
     const message =
       error?.message || String(error);
 
