@@ -331,6 +331,38 @@ function getTerritoryClarificationReply(
   return `${locationIntro} Please enter the full street address, including city, state, and ZIP code.`;
 }
 
+function getOutsideServiceAreaReply(
+  payload: any,
+  zipResolution: ZipResolution | null
+) {
+  if (payload?.recommendationStatus !== "Outside service area") {
+    return null;
+  }
+
+  const zip = String(
+    payload?.zip || zipResolution?.zip || "that ZIP"
+  ).trim();
+
+  return `${zip} is outside the approved Den Defenders sales service area.`;
+}
+
+function malformedZipReply(
+  messages: ConversationMessage[]
+) {
+  const text = latestUserMessage(messages).trim();
+  const zipLabelMatch = text.match(
+    /\bzip(?:\s+code)?\b\D*(\d{1,10}(?:-\d{1,6})?)\b/i
+  );
+  const bareNumberMatch = text.match(/^\d{1,10}(?:-\d{1,6})?$/);
+  const value = zipLabelMatch?.[1] || bareNumberMatch?.[0] || "";
+
+  if (!value || /^\d{5}(?:-\d{4})?$/.test(value)) {
+    return null;
+  }
+
+  return "Please enter a valid five-digit ZIP code, such as 95207.";
+}
+
 function formatConciseSchedulerReply(
   payload: any,
   zipResolution: ZipResolution | null,
@@ -689,6 +721,26 @@ export async function POST(req: Request) {
     const conversation =
       getConversationMessages(body);
 
+    if (conversation.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Missing conversation input",
+        },
+        { status: 400 }
+      );
+    }
+
+    const invalidZipReply =
+      malformedZipReply(conversation);
+
+    if (invalidZipReply) {
+      return NextResponse.json({
+        reply: invalidZipReply,
+        consultantChoices: [],
+      });
+    }
+
     const nextThreeRequest =
       isNextThreeOptionsRequest(conversation);
 
@@ -723,16 +775,6 @@ export async function POST(req: Request) {
       userHasNamedSalesConsultant(
         conversation
       );
-
-    if (conversation.length === 0) {
-      return NextResponse.json(
-        {
-          error:
-            "Missing conversation input",
-        },
-        { status: 400 }
-      );
-    }
 
     const tokenResponse =
       await auth0.getAccessToken();
@@ -815,11 +857,13 @@ INPUT RULES:
 - The prospective customer does not need to exist in ServiceTitan.
 - Never search for the prospective customer.
 - A ZIP code, city/state, or complete street address is valid for appointmentLocation.
-- A bare U.S. ZIP code is resolved server-side to its city, state, latitude, and longitude before Tool #50 runs. Do NOT ask the CSR to choose a consultant merely because the original input was only a ZIP code. However, if Tool #50 returns "Consultant selection required" for a shared territory, present that required choice.
-- When ZIP resolution is available, use the resolved ZIP + city + state as appointmentLocation. The server will also attach the authoritative ZIP-centroid coordinates so Tool #50 can test the complete Ross/Nick territory boundaries. Do not invent a different city, state, latitude, or longitude.
+- A bare U.S. ZIP code is resolved server-side to its city, state, latitude, and longitude before Tool #50 runs. Tool #50's canonical ZIP territory map is authoritative. Do NOT ask the CSR to choose a consultant merely because the original input was only a ZIP code. If Tool #50 returns "Consultant selection required" for a shared or 15-mile border territory, present exactly the returned question and choices.
+- When ZIP resolution is available, use the resolved ZIP + city + state as appointmentLocation. The server will also attach ZIP-centroid coordinates for routing. Do not invent a different city, state, latitude, or longitude, and do not override Tool #50's canonical territory result with an external ZIP service or city alias.
 - Pass consultantNames only when the CSR explicitly names or chooses a consultant, or when preserving that CSR choice on a follow-up such as "Next 3 Options." Never silently choose Mike Conarton, Ross P, or Nick Rendon for a shared Fresno/Bakersfield-area location.
 - If Tool #50 requires consultant selection, do not manufacture appointment options. Ask the returned question and preserve the returned choices.
 - For a Tool #50 Fresno/Bakersfield selection, offer exactly Mike Conarton, Ross P, and Nick Rendon. Never add names from the full consultant roster.
+- For a Tool #50 15-mile border selection, offer exactly the base-territory and live-route-qualified neighboring consultants returned by Tool #50. Never add a neighboring consultant merely because the territories touch or that consultant's calendar is open.
+- If Tool #50 returns "Outside service area" for a valid ZIP, state that the ZIP is outside the approved Den Defenders sales service area. Do not ask for a street address or expose a consultant roster.
 - If Tool #50 cannot confidently resolve a territory, ask for the full street address, city, state, and ZIP. Never show its internal company-wide consultant roster.
 - If the user specifies a starting date, pass it as startDate.
 - If the user does not specify a starting date, omit startDate and let Tool #50 use the current Pacific business date.
@@ -1138,6 +1182,21 @@ Once recommend_sales_schedule has returned successfully during the current reque
 
         const schedulerPayload =
           extractSchedulerPayload(toolResult);
+
+        const outsideServiceAreaReply =
+          schedulerPayload
+            ? getOutsideServiceAreaReply(
+                schedulerPayload,
+                zipResolution
+              )
+            : null;
+
+        if (outsideServiceAreaReply) {
+          return NextResponse.json({
+            reply: outsideServiceAreaReply,
+            consultantChoices: [],
+          });
+        }
 
         const consultantSelection =
           schedulerPayload
