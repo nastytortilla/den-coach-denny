@@ -76,7 +76,7 @@ Determine territory eligibility before checking availability.
 - A scheduling tool recommendation does not override these territory rules.
 - If a tool suggests someone outside the territory, reject that suggestion.
 - Use geographic or routing tools when the location's territory is uncertain.
-- For the shared Fresno/Bakersfield sales area, including Paso Robles ZIP 93446, do not silently choose between Mike Conarton, Ross P, and Nick Rendon. Ask the CSR which of those three consultants to use before checking availability.
+- For the shared Fresno/Bakersfield sales area—including every ZIP inside either Ross P's or Nick Rendon's normal perimeter, Paso Robles ZIP 93446, San Simeon ZIP 93452, and Patterson ZIP 95363—do not silently choose between Mike Conarton, Ross P, and Nick Rendon. Ask the CSR which of those three consultants to use before checking availability.
 - In other overlapping territories, compare the eligible consultants using their live schedules and routes unless a separate selection rule applies.
 - Never claim a location is inside a territory when the available geographic information does not support it.
 
@@ -345,7 +345,7 @@ Follow this exact order:
 3. Determine which consultant territory contains the proposed location.
 4. If the location is in the shared Fresno/Bakersfield area and the CSR has not already chosen a consultant, stop and ask: "Which consultant do you want to schedule: Mike Conarton, Ross P, or Nick Rendon?"
    - Offer exactly those three names and no others.
-   - Trust Tool #50's exact Fresno/Bakersfield ZIP lookup; do not replace its choices with the company-wide consultant list.
+   - Trust Tool #50's exact ZIP lookup and ZIP-centroid boundary check for the full Ross/Nick territory union; do not replace its choices with the company-wide consultant list.
    - If Tool #50 cannot confidently resolve a territory, never display its internal consultant roster. Ask for the full street address, city, state, and ZIP instead.
 5. Eliminate every consultant whose territory does not contain the location. If Mike was selected for the shared area, also eliminate every workweek without a live FRESNO / BAKERSFIELD AREA marker.
 6. Determine the starting date.

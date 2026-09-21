@@ -815,8 +815,8 @@ INPUT RULES:
 - The prospective customer does not need to exist in ServiceTitan.
 - Never search for the prospective customer.
 - A ZIP code, city/state, or complete street address is valid for appointmentLocation.
-- A bare U.S. ZIP code is resolved server-side to its USPS/GeoNames city and state before Tool #50 runs. Do NOT ask the CSR to choose a consultant merely because the original input was only a ZIP code. However, if Tool #50 returns "Consultant selection required" for a shared territory, present that required choice.
-- When ZIP resolution is available, use the resolved ZIP + city + state as appointmentLocation so Tool #50 can apply its normal territory resolver. Do not invent a different city or state.
+- A bare U.S. ZIP code is resolved server-side to its city, state, latitude, and longitude before Tool #50 runs. Do NOT ask the CSR to choose a consultant merely because the original input was only a ZIP code. However, if Tool #50 returns "Consultant selection required" for a shared territory, present that required choice.
+- When ZIP resolution is available, use the resolved ZIP + city + state as appointmentLocation. The server will also attach the authoritative ZIP-centroid coordinates so Tool #50 can test the complete Ross/Nick territory boundaries. Do not invent a different city, state, latitude, or longitude.
 - Pass consultantNames only when the CSR explicitly names or chooses a consultant, or when preserving that CSR choice on a follow-up such as "Next 3 Options." Never silently choose Mike Conarton, Ross P, or Nick Rendon for a shared Fresno/Bakersfield-area location.
 - If Tool #50 requires consultant selection, do not manufacture appointment options. Ask the returned question and preserve the returned choices.
 - For a Tool #50 Fresno/Bakersfield selection, offer exactly Mike Conarton, Ross P, and Nick Rendon. Never add names from the full consultant roster.
@@ -1030,6 +1030,11 @@ Once recommend_sales_schedule has returned successfully during the current reque
           toolArguments = {};
         }
 
+        // Coordinates are trusted only when this server resolved them from the
+        // ZIP lookup. Discard any model-generated coordinate values.
+        delete toolArguments.appointmentLatitude;
+        delete toolArguments.appointmentLongitude;
+
         if (zipResolution) {
           const requestedLocation = String(
             toolArguments.appointmentLocation ||
@@ -1045,6 +1050,23 @@ Once recommend_sales_schedule has returned successfully during the current reque
           ) {
             toolArguments.appointmentLocation =
               `${zipResolution.zip}, ${zipResolution.city}, ${zipResolution.stateAbbreviation}`;
+          }
+
+          const resolvedLatitude = Number(
+            zipResolution.latitude
+          );
+          const resolvedLongitude = Number(
+            zipResolution.longitude
+          );
+
+          if (
+            Number.isFinite(resolvedLatitude) &&
+            Number.isFinite(resolvedLongitude)
+          ) {
+            toolArguments.appointmentLatitude =
+              resolvedLatitude;
+            toolArguments.appointmentLongitude =
+              resolvedLongitude;
           }
         }
 
