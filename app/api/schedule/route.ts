@@ -313,6 +313,24 @@ function getConsultantSelection(
   };
 }
 
+function getTerritoryClarificationReply(
+  payload: any,
+  zipResolution: ZipResolution | null
+) {
+  if (
+    payload?.recommendationStatus !==
+    "Territory clarification required"
+  ) {
+    return null;
+  }
+
+  const locationIntro = zipResolution
+    ? `${zipResolution.zip} is ${zipResolution.city}, ${zipResolution.stateAbbreviation}, but I could not confidently match it to a sales territory.`
+    : "I could not confidently match that location to a sales territory.";
+
+  return `${locationIntro} Please enter the full street address, including city, state, and ZIP code.`;
+}
+
 function formatConciseSchedulerReply(
   payload: any,
   zipResolution: ZipResolution | null,
@@ -801,6 +819,8 @@ INPUT RULES:
 - When ZIP resolution is available, use the resolved ZIP + city + state as appointmentLocation so Tool #50 can apply its normal territory resolver. Do not invent a different city or state.
 - Pass consultantNames only when the CSR explicitly names or chooses a consultant, or when preserving that CSR choice on a follow-up such as "Next 3 Options." Never silently choose Mike Conarton, Ross P, or Nick Rendon for a shared Fresno/Bakersfield-area location.
 - If Tool #50 requires consultant selection, do not manufacture appointment options. Ask the returned question and preserve the returned choices.
+- For a Tool #50 Fresno/Bakersfield selection, offer exactly Mike Conarton, Ross P, and Nick Rendon. Never add names from the full consultant roster.
+- If Tool #50 cannot confidently resolve a territory, ask for the full street address, city, state, and ZIP. Never show its internal company-wide consultant roster.
 - If the user specifies a starting date, pass it as startDate.
 - If the user does not specify a starting date, omit startDate and let Tool #50 use the current Pacific business date.
 - If the user asks for a specific number of options, pass that number as maxRecommendations. Otherwise request 3.
@@ -1118,6 +1138,21 @@ Once recommend_sales_schedule has returned successfully during the current reque
             reply: selectionReply,
             consultantChoices:
               consultantSelection.choices,
+          });
+        }
+
+        const territoryClarificationReply =
+          schedulerPayload
+            ? getTerritoryClarificationReply(
+                schedulerPayload,
+                zipResolution
+              )
+            : null;
+
+        if (territoryClarificationReply) {
+          return NextResponse.json({
+            reply: territoryClarificationReply,
+            consultantChoices: [],
           });
         }
 

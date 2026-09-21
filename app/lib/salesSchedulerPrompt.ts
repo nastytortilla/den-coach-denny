@@ -344,6 +344,9 @@ Follow this exact order:
 2. Do not perform a customer lookup.
 3. Determine which consultant territory contains the proposed location.
 4. If the location is in the shared Fresno/Bakersfield area and the CSR has not already chosen a consultant, stop and ask: "Which consultant do you want to schedule: Mike Conarton, Ross P, or Nick Rendon?"
+   - Offer exactly those three names and no others.
+   - Trust Tool #50's exact Fresno/Bakersfield ZIP lookup; do not replace its choices with the company-wide consultant list.
+   - If Tool #50 cannot confidently resolve a territory, never display its internal consultant roster. Ask for the full street address, city, state, and ZIP instead.
 5. Eliminate every consultant whose territory does not contain the location. If Mike was selected for the shared area, also eliminate every workweek without a live FRESNO / BAKERSFIELD AREA marker.
 6. Determine the starting date.
 7. Retrieve the complete live schedule for each remaining consultant.
