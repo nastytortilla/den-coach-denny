@@ -17,6 +17,8 @@ export default function SchedulePage() {
   const [input, setInput] = useState(DEFAULT_SEARCH);
   const [conversation, setConversation] =
     useState<ConversationMessage[]>([]);
+  const [consultantChoices, setConsultantChoices] =
+    useState<string[]>([]);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
   const hasAssistantReply = conversation.some(
@@ -38,6 +40,7 @@ export default function SchedulePage() {
 
     setConversation(nextConversation);
     setInput("");
+    setConsultantChoices([]);
     setStatus("Checking sales schedules and routes...");
     setLoading(true);
 
@@ -78,10 +81,24 @@ export default function SchedulePage() {
         content: data.reply || "No reply returned.",
       };
 
+      const returnedConsultantChoices = Array.isArray(
+        data.consultantChoices
+      )
+        ? data.consultantChoices
+            .map((choice: unknown) =>
+              String(choice || "").trim()
+            )
+            .filter(Boolean)
+        : [];
+
       setConversation([
         ...nextConversation,
         assistantMessage,
       ]);
+
+      setConsultantChoices(
+        returnedConsultantChoices
+      );
 
       setStatus("");
     } catch (error: any) {
@@ -107,9 +124,18 @@ export default function SchedulePage() {
     await submitMessage(NEXT_OPTIONS_MESSAGE);
   }
 
+  async function chooseConsultant(
+    consultantName: string
+  ) {
+    await submitMessage(
+      `Use ${consultantName} for this location.`
+    );
+  }
+
   function startNewSearch() {
     setConversation([]);
     setInput(DEFAULT_SEARCH);
+    setConsultantChoices([]);
     setStatus("");
     setLoading(false);
   }
@@ -155,6 +181,51 @@ export default function SchedulePage() {
         </div>
       )}
 
+      {consultantChoices.length > 0 && (
+        <div
+          style={{
+            marginBottom: 20,
+            padding: 14,
+            border: "1px solid rgba(0, 0, 0, 0.18)",
+            borderRadius: 12,
+          }}
+        >
+          <p
+            style={{
+              marginTop: 0,
+              marginBottom: 10,
+              fontWeight: 800,
+            }}
+          >
+            Choose the sales consultant:
+          </p>
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              flexWrap: "wrap",
+            }}
+          >
+            {consultantChoices.map(
+              (consultantName) => (
+                <button
+                  key={consultantName}
+                  onClick={() =>
+                    chooseConsultant(
+                      consultantName
+                    )
+                  }
+                  className="den-link"
+                  disabled={loading}
+                >
+                  {consultantName}
+                </button>
+              )
+            )}
+          </div>
+        </div>
+      )}
+
       <p style={{ marginTop: 0, fontWeight: 800 }}>
         {conversation.length === 0
           ? "Enter the customer’s ZIP code, city, or address:"
@@ -192,15 +263,16 @@ export default function SchedulePage() {
               : "Ask Denny"}
         </button>
 
-        {hasAssistantReply && (
-          <button
-            onClick={nextThreeOptions}
-            className="den-link"
-            disabled={loading}
-          >
-            Next 3 Options
-          </button>
-        )}
+        {hasAssistantReply &&
+          consultantChoices.length === 0 && (
+            <button
+              onClick={nextThreeOptions}
+              className="den-link"
+              disabled={loading}
+            >
+              Next 3 Options
+            </button>
+          )}
 
         {conversation.length > 0 && (
           <button

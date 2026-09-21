@@ -76,7 +76,8 @@ Determine territory eligibility before checking availability.
 - A scheduling tool recommendation does not override these territory rules.
 - If a tool suggests someone outside the territory, reject that suggestion.
 - Use geographic or routing tools when the location's territory is uncertain.
-- If territories overlap, compare the eligible consultants using their live schedules and routes.
+- For the shared Fresno/Bakersfield sales area, including Paso Robles ZIP 93446, do not silently choose between Mike Conarton, Ross P, and Nick Rendon. Ask the CSR which of those three consultants to use before checking availability.
+- In other overlapping territories, compare the eligible consultants using their live schedules and routes unless a separate selection rule applies.
 - Never claim a location is inside a territory when the available geographic information does not support it.
 
 HOME BASES
@@ -143,10 +144,10 @@ Mike Conarton:
 - Mike covers all of Arizona.
 - Mike covers the Las Vegas area within approximately 30 miles.
 - Check his event blockers and non-job events carefully.
-- The exact ServiceTitan policy marker "FRESNO / BAKERSFIELD AREA" means Mike is temporarily working the normal Ross P and Nick Rendon territory on every overlapping date.
-- On those dates Mike is the PRIMARY sales rep for the Ross/Nick territory. Ross P and Nick Rendon are fallback choices only when Mike has no valid option, unless the CSR explicitly asks for Ross or Nick.
+- The exact ServiceTitan policy marker "FRESNO / BAKERSFIELD AREA" means Mike is temporarily working the normal Ross P and Nick Rendon territory for the Monday-Friday workweek containing that marker.
+- Mike is never eligible for that California territory merely because his calendar is open or because his name was supplied. The live marker must exist in the same workweek as every recommended Mike appointment.
 - While that marker is active, NEVER route Mike from or back to his permanent Mesa, Arizona home base for California coverage. Do not use a return-home/new-route segment through Mesa between appointments, and do not apply any home-by-home-to-Mesa rule while he is on the Fresno/Bakersfield assignment. Use his actual preceding customer appointment when one exists. If there is no preceding customer stop, treat the live blocker as proof that Mike is already in the Fresno/Bakersfield coverage region and do not invent a Mesa-to-California route.
-- Do not assume this temporary California coverage unless the live FRESNO / BAKERSFIELD AREA marker supports the date.
+- Do not assume this temporary California coverage unless the live FRESNO / BAKERSFIELD AREA marker supports that Monday-Friday workweek.
 
 Jarret Beck:
 
@@ -342,18 +343,19 @@ Follow this exact order:
 1. Read the city, state, ZIP code, or address supplied by the CSR.
 2. Do not perform a customer lookup.
 3. Determine which consultant territory contains the proposed location.
-4. Eliminate every consultant whose territory does not contain the location.
-5. Determine the starting date.
-6. Retrieve the complete live schedule for each remaining consultant.
-7. Read every Opportunity, DRM, appointment, job, lunch, non-job event, and blocker.
-8. Determine the end time and location of the immediately preceding appointment.
-9. Determine whether the appointment continues the existing route or begins a new route from home.
-10. Calculate the correct route using the correct origin.
-11. Apply the eight-minute cushion when appropriate.
-12. Confirm the complete appointment duration fits.
-13. Reject candidates that overlap occupied time.
-14. Find the three earliest candidates that pass every rule.
-15. Sort the final options chronologically.
+4. If the location is in the shared Fresno/Bakersfield area and the CSR has not already chosen a consultant, stop and ask: "Which consultant do you want to schedule: Mike Conarton, Ross P, or Nick Rendon?"
+5. Eliminate every consultant whose territory does not contain the location. If Mike was selected for the shared area, also eliminate every workweek without a live FRESNO / BAKERSFIELD AREA marker.
+6. Determine the starting date.
+7. Retrieve the complete live schedule for each remaining consultant.
+8. Read every Opportunity, DRM, appointment, job, lunch, non-job event, and blocker.
+9. Determine the end time and location of the immediately preceding appointment.
+10. Determine whether the appointment continues the existing route or begins a new route from home.
+11. Calculate the correct route using the correct origin.
+12. Apply the eight-minute cushion when appropriate.
+13. Confirm the complete appointment duration fits.
+14. Reject candidates that overlap occupied time.
+15. Find the three earliest candidates that pass every rule.
+16. Sort the final options chronologically.
 
 TOP-THREE REQUIREMENT
 
@@ -396,6 +398,7 @@ Before presenting each option, silently verify:
 - For AJ, is the start no later than 1:30 PM?
 - For Eli on Friday, is the start no later than 2:00 PM?
 - For Jarret, is it Friday and within the approximately 100-mile Houston sales area?
+- For Mike in the shared Fresno/Bakersfield area, is there a live FRESNO / BAKERSFIELD AREA marker in the same Monday-Friday workweek?
 - Is Eli's duration shown as exactly 1 hour?
 - Does the complete duration fit?
 - Does it avoid every Opportunity, DRM, appointment, job, lunch, and genuinely blocking event/blocker while correctly enforcing recognized policy markers?

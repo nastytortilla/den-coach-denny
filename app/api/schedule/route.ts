@@ -131,6 +131,19 @@ function latestUserMessageContainsZip(
   );
 }
 
+function userHasNamedSalesConsultant(
+  messages: ConversationMessage[]
+) {
+  const userText = messages
+    .filter((message) => message.role === "user")
+    .map((message) => message.content)
+    .join("\n");
+
+  return /\b(?:AJ\s+Smith|Eli\s+R|Alexander\s+Cristerna|Moises\s+Covarrubias|Mike(?:\s+Conarton)?|Jarret(?:\s+Beck)?|Nick(?:\s+Rendon)?|Ross\s+P|Ross)\b/i.test(
+    userText
+  );
+}
+
 function isExplanationFollowUp(
   messages: ConversationMessage[]
 ) {
@@ -264,6 +277,40 @@ function toolConfirmsSalesServiceArea(
       : [];
 
   return territoryConsultants.length > 0;
+}
+
+function getConsultantSelection(
+  payload: any
+) {
+  const selection = payload?.consultantSelection;
+
+  if (
+    payload?.recommendationStatus !==
+      "Consultant selection required" ||
+    selection?.required !== true
+  ) {
+    return null;
+  }
+
+  const choices = Array.isArray(selection?.choices)
+    ? selection.choices
+        .map((choice: unknown) => String(choice || "").trim())
+        .filter(Boolean)
+    : [];
+
+  if (choices.length === 0) {
+    return null;
+  }
+
+  const question = String(
+    selection?.question ||
+      "Which sales consultant do you want to schedule?"
+  ).trim();
+
+  return {
+    question,
+    choices,
+  };
 }
 
 function formatConciseSchedulerReply(
@@ -654,6 +701,11 @@ export async function POST(req: Request) {
     const explanationFollowUp =
       isExplanationFollowUp(conversation);
 
+    const userNamedSalesConsultant =
+      userHasNamedSalesConsultant(
+        conversation
+      );
+
     if (conversation.length === 0) {
       return NextResponse.json(
         {
@@ -745,8 +797,10 @@ INPUT RULES:
 - The prospective customer does not need to exist in ServiceTitan.
 - Never search for the prospective customer.
 - A ZIP code, city/state, or complete street address is valid for appointmentLocation.
-- A bare U.S. ZIP code is resolved server-side to its USPS/GeoNames city and state before Tool #50 runs. Do NOT ask the CSR to choose a consultant just because the original input was only a ZIP code.
+- A bare U.S. ZIP code is resolved server-side to its USPS/GeoNames city and state before Tool #50 runs. Do NOT ask the CSR to choose a consultant merely because the original input was only a ZIP code. However, if Tool #50 returns "Consultant selection required" for a shared territory, present that required choice.
 - When ZIP resolution is available, use the resolved ZIP + city + state as appointmentLocation so Tool #50 can apply its normal territory resolver. Do not invent a different city or state.
+- Pass consultantNames only when the CSR explicitly names or chooses a consultant, or when preserving that CSR choice on a follow-up such as "Next 3 Options." Never silently choose Mike Conarton, Ross P, or Nick Rendon for a shared Fresno/Bakersfield-area location.
+- If Tool #50 requires consultant selection, do not manufacture appointment options. Ask the returned question and preserve the returned choices.
 - If the user specifies a starting date, pass it as startDate.
 - If the user does not specify a starting date, omit startDate and let Tool #50 use the current Pacific business date.
 - If the user asks for a specific number of options, pass that number as maxRecommendations. Otherwise request 3.
@@ -981,6 +1035,10 @@ Once recommend_sales_schedule has returned successfully during the current reque
           delete toolArguments.endDate;
         }
 
+        if (!userNamedSalesConsultant) {
+          delete toolArguments.consultantNames;
+        }
+
         const toolResult =
           await mcpClient.callTool(
             {
@@ -1038,6 +1096,30 @@ Once recommend_sales_schedule has returned successfully during the current reque
 
         const schedulerPayload =
           extractSchedulerPayload(toolResult);
+
+        const consultantSelection =
+          schedulerPayload
+            ? getConsultantSelection(
+                schedulerPayload
+              )
+            : null;
+
+        if (consultantSelection) {
+          const selectionReply =
+            zipWasEnteredThisTurn &&
+            zipResolution &&
+            toolConfirmsSalesServiceArea(
+              schedulerPayload
+            )
+              ? `${zipResolution.zip} is ${zipResolution.city}, ${zipResolution.stateAbbreviation}, and it is in our service area.\n\n${consultantSelection.question}`
+              : consultantSelection.question;
+
+          return NextResponse.json({
+            reply: selectionReply,
+            consultantChoices:
+              consultantSelection.choices,
+          });
+        }
 
         if (!explanationFollowUp && schedulerPayload) {
           const conciseReply =
