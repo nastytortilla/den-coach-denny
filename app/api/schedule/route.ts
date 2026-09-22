@@ -131,19 +131,6 @@ function latestUserMessageContainsZip(
   );
 }
 
-function userHasNamedSalesConsultant(
-  messages: ConversationMessage[]
-) {
-  const userText = messages
-    .filter((message) => message.role === "user")
-    .map((message) => message.content)
-    .join("\n");
-
-  return /\b(?:AJ\s+Smith|Eli\s+R|Alexander\s+Cristerna|Moises\s+Covarrubias|Mike(?:\s+Conarton)?|Jarret(?:\s+Beck)?|Nick(?:\s+Rendon)?|Ross\s+P|Ross)\b/i.test(
-    userText
-  );
-}
-
 function isExplanationFollowUp(
   messages: ConversationMessage[]
 ) {
@@ -277,40 +264,6 @@ function toolConfirmsSalesServiceArea(
       : [];
 
   return territoryConsultants.length > 0;
-}
-
-function getConsultantSelection(
-  payload: any
-) {
-  const selection = payload?.consultantSelection;
-
-  if (
-    payload?.recommendationStatus !==
-      "Consultant selection required" ||
-    selection?.required !== true
-  ) {
-    return null;
-  }
-
-  const choices = Array.isArray(selection?.choices)
-    ? selection.choices
-        .map((choice: unknown) => String(choice || "").trim())
-        .filter(Boolean)
-    : [];
-
-  if (choices.length === 0) {
-    return null;
-  }
-
-  const question = String(
-    selection?.question ||
-      "Which sales consultant do you want to schedule?"
-  ).trim();
-
-  return {
-    question,
-    choices,
-  };
 }
 
 function getTerritoryClarificationReply(
@@ -771,11 +724,6 @@ export async function POST(req: Request) {
     const explanationFollowUp =
       isExplanationFollowUp(conversation);
 
-    const userNamedSalesConsultant =
-      userHasNamedSalesConsultant(
-        conversation
-      );
-
     const tokenResponse =
       await auth0.getAccessToken();
 
@@ -857,12 +805,12 @@ INPUT RULES:
 - The prospective customer does not need to exist in ServiceTitan.
 - Never search for the prospective customer.
 - A ZIP code, city/state, or complete street address is valid for appointmentLocation.
-- A bare U.S. ZIP code is resolved server-side to its city, state, latitude, and longitude before Tool #50 runs. Tool #50's canonical ZIP territory map is authoritative. Do NOT ask the CSR to choose a consultant merely because the original input was only a ZIP code. If Tool #50 returns "Consultant selection required" for a shared or 15-mile border territory, present exactly the returned question and choices.
+- A bare U.S. ZIP code is resolved server-side to its city, state, latitude, and longitude before Tool #50 runs. Tool #50's canonical ZIP territory map is authoritative.
 - When ZIP resolution is available, use the resolved ZIP + city + state as appointmentLocation. The server will also attach ZIP-centroid coordinates for routing. Do not invent a different city, state, latitude, or longitude, and do not override Tool #50's canonical territory result with an external ZIP service or city alias.
-- Pass consultantNames only when the CSR explicitly names or chooses a consultant, or when preserving that CSR choice on a follow-up such as "Next 3 Options." Never silently choose Mike Conarton, Ross P, or Nick Rendon for a shared Fresno/Bakersfield-area location.
-- If Tool #50 requires consultant selection, do not manufacture appointment options. Ask the returned question and preserve the returned choices.
-- For a Tool #50 Fresno/Bakersfield selection, offer exactly Mike Conarton, Ross P, and Nick Rendon. Never add names from the full consultant roster.
-- For a Tool #50 15-mile border selection, offer exactly the base-territory and live-route-qualified neighboring consultants returned by Tool #50. Never add a neighboring consultant merely because the territories touch or that consultant's calendar is open.
+- Never ask the CSR to select a sales consultant and never pass consultantNames. Tool #50 automatically chooses the best qualified consultant for each recommended date.
+- Nick Rendon is not eligible for sales scheduling.
+- Mike Conarton is the Fresno/Bakersfield primary only during a live Fresno/Bakersfield coverage week; otherwise he remains in Arizona/Las Vegas.
+- Ross P is eligible only after a same-day prior Returning to Install Security Products appointment within one hour. An empty Ross day remains reserved for return installs.
 - If Tool #50 returns "Outside service area" for a valid ZIP, state that the ZIP is outside the approved Den Defenders sales service area. Do not ask for a street address or expose a consultant roster.
 - If Tool #50 cannot confidently resolve a territory, ask for the full street address, city, state, and ZIP. Never show its internal company-wide consultant roster.
 - If the user specifies a starting date, pass it as startDate.
@@ -874,7 +822,7 @@ FOLLOW-UP RULES:
 - If the user says "Next 3 Options", asks for "three more", "more dates", "next options", or otherwise wants additional choices, call recommend_sales_schedule again with maxRecommendations set to 3.
 - Populate excludeOptions with EVERY appointment option already presented earlier in the conversation, using its date, local start time, and consultant when available.
 - Do not repeat an earlier option when the user asked for additional choices.
-- "Next 3 Options" means the customer declined the currently displayed choices. Keep the same location and consultant/territory unless the CSR explicitly changes them.
+- "Next 3 Options" means the customer declined the currently displayed choices. Keep the same location and let Tool #50 automatically reassess all qualified consultants.
 - For the exact "Next 3 Options" button request, start the new search on the calendar day AFTER the latest appointment date already displayed. This intentionally returns choices on later dates instead of sliding the same day's option by 15 minutes.
 
 DEFAULT OUTPUT FORMAT:
@@ -1121,9 +1069,7 @@ Once recommend_sales_schedule has returned successfully during the current reque
           delete toolArguments.endDate;
         }
 
-        if (!userNamedSalesConsultant) {
-          delete toolArguments.consultantNames;
-        }
+        delete toolArguments.consultantNames;
 
         const toolResult =
           await mcpClient.callTool(
@@ -1195,30 +1141,6 @@ Once recommend_sales_schedule has returned successfully during the current reque
           return NextResponse.json({
             reply: outsideServiceAreaReply,
             consultantChoices: [],
-          });
-        }
-
-        const consultantSelection =
-          schedulerPayload
-            ? getConsultantSelection(
-                schedulerPayload
-              )
-            : null;
-
-        if (consultantSelection) {
-          const selectionReply =
-            zipWasEnteredThisTurn &&
-            zipResolution &&
-            toolConfirmsSalesServiceArea(
-              schedulerPayload
-            )
-              ? `${zipResolution.zip} is ${zipResolution.city}, ${zipResolution.stateAbbreviation}, and it is in our service area.\n\n${consultantSelection.question}`
-              : consultantSelection.question;
-
-          return NextResponse.json({
-            reply: selectionReply,
-            consultantChoices:
-              consultantSelection.choices,
           });
         }
 
