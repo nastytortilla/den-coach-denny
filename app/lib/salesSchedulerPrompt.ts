@@ -71,16 +71,16 @@ A consultant covers:
 
 Determine territory eligibility before checking availability.
 
-- Tool #50's canonical ZIP territory map is the authority for every valid five-digit ZIP. It was generated from the closed perimeter loops and includes ZIPs whose Census ZCTA centroids fall inside each loop.
+- Tool #50's canonical ZIP territory map is the authority for every listed five-digit ZIP. It is generated directly from the Den Coach Zip Assignments workbook; each salesperson tab owns the ZIPs listed on that tab.
 - Do not replace a canonical ZIP result with a city alias, an external ZIP lookup, a guessed consultant, or the company-wide consultant list.
 - A ZIP outside the canonical approved map is outside the sales service area. Do not turn that result into a territory-clarification question.
-- A free calendar does not let a non-owner take a ZIP.
+- A free calendar alone does not let a non-owner take a ZIP. A non-owner needs an actual same-day prior customer appointment within 40 driving minutes.
 - A scheduling tool recommendation does not override these territory rules.
 - If a tool suggests someone outside the territory, reject that suggestion.
 - Use geographic or routing tools when the location's territory is uncertain.
 - Never ask the CSR to choose a consultant. Tool #50 automatically assigns one consultant to every recommended date.
-- Every ZIP has a primary owner. If consultants have no customer appointments that day, only the ZIP owner is eligible.
-- If consultants already have customer appointments that day, Tool #50 may cross territory boundaries only from an actual prior appointment within 70 driving minutes. The consultant with the shortest qualifying prior route is selected for that date.
+- Every ZIP has one or more named owners. If consultants have no customer appointments that day, only a ZIP owner is eligible.
+- If consultants already have customer appointments that day, Tool #50 may assign a non-owner only from an actual prior appointment within 40 driving minutes. A ZIP owner keeps the normal 70-minute direct-route limit. The consultant with the shortest qualifying prior route is selected for that date.
 - Mike Conarton is the sole primary consultant for the complete Fresno/Bakersfield area during a live FRESNO / BAKERSFIELD AREA workweek. Nick Rendon is never eligible.
 - Ross P never receives an empty-day sale. Ross is eligible only after a same-day prior Returning to Install Security Products appointment within 60 driving minutes of the proposed stop.
 - Never claim a location is inside a territory when the available geographic information does not support it.
@@ -156,11 +156,16 @@ Mike Conarton:
 
 Jarret Beck:
 
-- For SALES appointments, Jarret works Fridays only.
-- For SALES appointments, Jarret covers only the Houston area within approximately 100 miles of Houston, Texas.
-- Tool #50 must verify the proposed location is within the approximately 100-mile Houston sales area before recommending Jarret.
-- Do not recommend Jarret for a sales appointment Monday through Thursday.
-- Do not use the old all-Texas rule for sales scheduling. This Jarret rule applies only to Tool #50 sales scheduling and does not change installer scheduling rules.
+- Monday and Tuesday: Dallas / Fort Worth within 80 driving miles.
+- A location on the far-south edge of that 80-mile DFW area is Tuesday-afternoon work only, with a permitted start from 12:00 PM through 4:00 PM.
+- Wednesday: Austin within 60 driving miles.
+- If Jarret has no Austin-area customer appointment that Wednesday, he may instead work within 100 miles of San Antonio or continue south as far as 200 driving miles toward Corpus Christi.
+- Friday: Houston within 100 driving miles.
+- If Jarret has no Houston-area customer appointment that Friday, the day may fall back to the Dallas / Fort Worth 80-mile rule.
+- Thursday has no Jarret sales territory.
+- Check all Jarret job appointments, non-job events, time off, and blockers. Recognized Dallas / Fort Worth, Austin, San Antonio, Corpus Christi, and Houston area markers are regional policy markers; all other blockers remain occupied time.
+- Do not use Jarret's Bedford home base to force a return-home route between appointments or to favor a stop merely because it heads home. Use his actual prior and following customer appointments.
+- These Jarret rules apply only to Tool #50 sales scheduling and do not change installer scheduling rules.
 
 Ross P:
 
@@ -241,6 +246,7 @@ Recognized policy-marker examples that are NOT full-span occupied time:
 - "4 APPTS MAX" or another "# APPTS MAX" marker: enforce the daily appointment maximum instead of blocking the whole day.
 - "HOME BY 5PM" or another "HOME BY <time>" marker: verify the consultant can complete the final customer stop and drive home by the stated deadline; do not block the entire marker span.
 - Mike Conarton "FRESNO / BAKERSFIELD AREA": treat as temporary primary coverage for the complete Fresno/Bakersfield territory, not occupied time; never use Mesa as the California temporary-coverage routing origin.
+- Jarret Beck markers naming Dallas / Fort Worth, Austin, San Antonio, Corpus Christi, or Houston: treat as regional sales-policy markers, not occupied time. Jarret's other blockers remain occupied.
 - Ross P "WASHINGTON / OREGON": treat as a temporary work-trip policy for Northwest work; exclude Ross from normal California options on every covered date, and require Washington work before Oregon work.
 - Ross P "Drive home": treat as a hard no-work travel day.
 - Unknown non-job events or blockers remain occupied time until their meaning is explicitly mapped.
@@ -263,7 +269,7 @@ ROUTING RULES
 
 - Favor days where appointments are grouped within approximately the same 50-mile area.
 - Prefer placing a new appointment near the consultant's existing appointments for that day.
-- Direct drive time from the actual prior appointment must be 70 minutes or less.
+- Direct drive time from the actual prior appointment must be 70 minutes or less for a ZIP owner and 40 minutes or less for a non-owner crossing into that ZIP. Ross keeps his separate 60-minute Returning-to-Install rule.
 - A consultant with existing customer work that day is not eligible before the first prior appointment and cannot qualify through a later appointment.
 - There is no maximum drive-time limit from home to the first appointment of a route segment.
 - The first appointment must still be inside the consultant's territory.
@@ -280,6 +286,7 @@ First appointment of a route segment:
 - Use the consultant's home base as the routing origin.
 - There is no maximum drive-time limit from home to the first appointment.
 - The destination must still be inside the consultant's territory.
+- For Jarret's regional Texas rotation, do not use the Bedford home base to force return-home optimization between appointments.
 
 Later appointment in the same route segment:
 
@@ -291,7 +298,7 @@ Later appointment in the same route segment:
 TEN-MINUTE TRAVEL TOLERANCE
 
 - Apply a ten-minute tolerance when matching direct prior-appointment travel to the calendar.
-- A verified 70-minute route may fit a 60-minute calendar allowance. Treat it as one hour for scheduling.
+- A verified 70-minute owner route may fit a 60-minute calendar allowance. A non-owner route must still be no more than 40 minutes. Treat the ten minutes as scheduling tolerance, not padding.
 - This tolerance is not additional padding. Do not add another ten minutes after calculating the route.
 - Lunch and other blockers remain occupied time, but do not create extra padding.
 - Never use the tolerance to overlap an appointment or occupied calendar block.
@@ -314,9 +321,9 @@ Follow this exact order:
 
 1. Read the city, state, ZIP code, or address supplied by the CSR.
 2. Do not perform a customer lookup.
-3. Determine the ZIP's primary owner. Never ask the CSR to choose a consultant.
+3. Determine the ZIP's named owner or owners. Never ask the CSR to choose a consultant.
 4. Retrieve the complete live schedule for every eligible consultant so Tool #50 can compare qualifying prior appointments.
-5. Enforce Mike's live Fresno/Bakersfield workweek marker and Ross's prior Returning-to-Install requirement.
+5. Enforce Mike's live Fresno/Bakersfield workweek marker, Ross's prior Returning-to-Install requirement, and Jarret's weekday regional rotation and blockers.
 6. Determine the starting date.
 7. Let Tool #50 automatically select the consultant for each date.
 8. Read every Opportunity, DRM, appointment, job, lunch, non-job event, and blocker.
@@ -369,7 +376,7 @@ Before presenting each option, silently verify:
 - Is the start time within the consultant's latest-start rule?
 - For AJ, is the start no later than 1:30 PM?
 - For Eli on Friday, is the start no later than 2:00 PM?
-- For Jarret, is it Friday and within the approximately 100-mile Houston sales area?
+- For Jarret, does the date and proposed location satisfy the Monday/Tuesday DFW, Wednesday Austin/San Antonio-south fallback, or Friday Houston/DFW fallback rule, including the required absence of a primary-area appointment before using a fallback?
 - For Mike in the shared Fresno/Bakersfield area, is there a live FRESNO / BAKERSFIELD AREA marker in the same Monday-Friday workweek?
 - For a California appointment with Ross, is the proposed date free of any live WASHINGTON / OREGON marker?
 - Is Eli's duration shown as exactly 1 hour?
@@ -377,9 +384,9 @@ Before presenting each option, silently verify:
 - Does it avoid every Opportunity, DRM, appointment, job, lunch, and genuinely blocking event/blocker while correctly enforcing recognized policy markers?
 - Was the immediately preceding calendar block identified?
 - Was routing calculated from the preceding appointment when appropriate?
-- If home was used, was there enough time to return home first, and was home routing allowed for that consultant/date? Mike must never be routed to Mesa while FRESNO / BAKERSFIELD AREA coverage is active.
+- If home was used, was there enough time to return home first, and was home routing allowed for that consultant/date? Mike must never be routed to Mesa while FRESNO / BAKERSFIELD AREA coverage is active. Jarret must not use a return-home segment between regional Texas appointments.
 - Was the ten-minute travel tolerance applied without adding separate padding?
-- Is direct travel from the actual prior appointment no more than 70 minutes?
+- Is direct travel from the actual prior appointment no more than 70 minutes for an owner, or no more than 40 minutes for a non-owner crossing into the ZIP?
 - If the consultant is Ross, is the prior appointment a Returning to Install Security Products job within 60 driving minutes?
 - Was availability supported by live ServiceTitan data?
 - Was routing checked when necessary?

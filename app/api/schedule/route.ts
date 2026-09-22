@@ -808,8 +808,10 @@ INPUT RULES:
 - A bare U.S. ZIP code is resolved server-side to its city, state, latitude, and longitude before Tool #50 runs. Tool #50's canonical ZIP territory map is authoritative.
 - When ZIP resolution is available, use the resolved ZIP + city + state as appointmentLocation. The server will also attach ZIP-centroid coordinates for routing. Do not invent a different city, state, latitude, or longitude, and do not override Tool #50's canonical territory result with an external ZIP service or city alias.
 - Never ask the CSR to select a sales consultant and never pass consultantNames. Tool #50 automatically chooses the best qualified consultant for each recommended date.
+- ZIP ownership comes from the Den Coach Zip Assignments workbook. A non-owner may qualify only from an actual same-day prior customer appointment within 40 driving minutes; Tool #50 compares qualifying routes and chooses the closest consultant for that date.
 - Nick Rendon is not eligible for sales scheduling.
 - Mike Conarton is the Fresno/Bakersfield primary only during a live Fresno/Bakersfield coverage week; otherwise he remains in Arizona/Las Vegas.
+- Jarret Beck follows the Monday/Tuesday Dallas-Fort Worth, Wednesday Austin with San Antonio/south fallback, and Friday Houston with Dallas-Fort Worth fallback rotation enforced by Tool #50. His blockers must be honored, and return-home optimization is not used between his regional appointments.
 - Ross P is eligible only after a same-day prior Returning to Install Security Products appointment within one hour. An empty Ross day remains reserved for return installs.
 - If Tool #50 returns "Outside service area" for a valid ZIP, state that the ZIP is outside the approved Den Defenders sales service area. Do not ask for a street address or expose a consultant roster.
 - If Tool #50 cannot confidently resolve a territory, ask for the full street address, city, state, and ZIP. Never show its internal company-wide consultant roster.
