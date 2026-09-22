@@ -25,6 +25,16 @@ const MAX_MESSAGE_CHARACTERS = 6000;
 const MAX_SINGLE_TOOL_RESULT = 60000;
 const MAX_TOTAL_TOOL_RESULTS = 120000;
 const MAX_OPENAI_RETRIES = 5;
+const ZIP_RESOLUTION_CACHE_MS =
+  7 * 24 * 60 * 60 * 1000;
+
+const zipResolutionCache = new Map<
+  string,
+  {
+    expiresAt: number;
+    value: ZipResolution;
+  }
+>();
 
 const MONTH_NUMBER: Record<string, string> = {
   january: "01",
@@ -128,6 +138,14 @@ function latestUserMessageContainsZip(
 ) {
   return /\b\d{5}(?:-\d{4})?\b/.test(
     latestUserMessage(messages)
+  );
+}
+
+function latestUserMessageIsBareZip(
+  messages: ConversationMessage[]
+) {
+  return /^\d{5}(?:-\d{4})?$/.test(
+    latestUserMessage(messages).trim()
   );
 }
 
@@ -408,6 +426,16 @@ function extractBareZipFromConversation(
 async function resolveUsZip(
   zip: string
 ): Promise<ZipResolution | null> {
+  const cached = zipResolutionCache.get(zip);
+
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+
+  if (cached) {
+    zipResolutionCache.delete(zip);
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(
     () => controller.abort(),
@@ -419,7 +447,10 @@ async function resolveUsZip(
       `https://api.zippopotam.us/us/${encodeURIComponent(zip)}`,
       {
         signal: controller.signal,
-        cache: "no-store",
+        next: {
+          revalidate:
+            ZIP_RESOLUTION_CACHE_MS / 1000,
+        },
       }
     );
 
@@ -446,7 +477,7 @@ async function resolveUsZip(
       return null;
     }
 
-    return {
+    const resolution = {
       zip,
       city,
       state,
@@ -460,6 +491,14 @@ async function resolveUsZip(
           ? String(place.longitude)
           : undefined,
     };
+
+    zipResolutionCache.set(zip, {
+      expiresAt:
+        Date.now() + ZIP_RESOLUTION_CACHE_MS,
+      value: resolution,
+    });
+
+    return resolution;
   } catch {
     return null;
   } finally {
@@ -660,13 +699,6 @@ export async function POST(req: Request) {
     const apiKey =
       process.env.OPENAI_API_KEY;
 
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: "Missing OPENAI_API_KEY" },
-        { status: 500 }
-      );
-    }
-
     const body = await req
       .json()
       .catch(() => ({}));
@@ -745,6 +777,129 @@ export async function POST(req: Request) {
         accessToken
       );
 
+    const directZipSchedulingRequest = Boolean(
+      zipResolution &&
+      !explanationFollowUp &&
+      (
+        latestUserMessageIsBareZip(conversation) ||
+        nextThreeRequest
+      )
+    );
+
+    if (directZipSchedulingRequest && zipResolution) {
+      const directArguments: Record<string, unknown> = {
+        appointmentLocation:
+          `${zipResolution.zip}, ${zipResolution.city}, ${zipResolution.stateAbbreviation}`,
+        maxRecommendations: 3,
+      };
+      const resolvedLatitude = Number(
+        zipResolution.latitude
+      );
+      const resolvedLongitude = Number(
+        zipResolution.longitude
+      );
+
+      if (
+        Number.isFinite(resolvedLatitude) &&
+        Number.isFinite(resolvedLongitude)
+      ) {
+        directArguments.appointmentLatitude =
+          resolvedLatitude;
+        directArguments.appointmentLongitude =
+          resolvedLongitude;
+      }
+
+      if (nextThreeStartDate) {
+        directArguments.startDate =
+          nextThreeStartDate;
+      }
+
+      const directToolResult =
+        await mcpClient.callTool(
+          {
+            name:
+              SALES_SCHEDULER_TOOL_NAME,
+            arguments: directArguments,
+          },
+          {
+            timeout: 240_000,
+          }
+        );
+
+      if (
+        typeof directToolResult === "object" &&
+        directToolResult !== null &&
+        "isError" in directToolResult &&
+        directToolResult.isError
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "ServiceTitan Tool #50 recommend_sales_schedule failed.",
+            details:
+              formatMcpResult(directToolResult),
+          },
+          { status: 502 }
+        );
+      }
+
+      const directPayload =
+        extractSchedulerPayload(
+          directToolResult
+        );
+      const outsideServiceAreaReply =
+        directPayload
+          ? getOutsideServiceAreaReply(
+              directPayload,
+              zipResolution
+            )
+          : null;
+
+      if (outsideServiceAreaReply) {
+        return NextResponse.json({
+          reply: outsideServiceAreaReply,
+          consultantChoices: [],
+        });
+      }
+
+      const territoryClarificationReply =
+        directPayload
+          ? getTerritoryClarificationReply(
+              directPayload,
+              zipResolution
+            )
+          : null;
+
+      if (territoryClarificationReply) {
+        return NextResponse.json({
+          reply: territoryClarificationReply,
+          consultantChoices: [],
+        });
+      }
+
+      const conciseReply = directPayload
+        ? formatConciseSchedulerReply(
+            directPayload,
+            zipResolution,
+            zipWasEnteredThisTurn
+          )
+        : null;
+
+      if (conciseReply) {
+        return NextResponse.json({
+          reply: conciseReply,
+        });
+      }
+
+      return NextResponse.json(
+        {
+          error:
+            "The scheduling tool returned no usable appointment options.",
+        },
+        { status: 502 }
+      );
+    }
+
     const mcpToolList =
       await mcpClient.listTools();
 
@@ -762,6 +917,13 @@ export async function POST(req: Request) {
             "ServiceTitan MCP Tool #50 recommend_sales_schedule is not available. Confirm the latest ServiceTitan MCP deployment is live and reconnect the MCP session.",
         },
         { status: 502 }
+      );
+    }
+
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: "Missing OPENAI_API_KEY" },
+        { status: 500 }
       );
     }
 
@@ -813,6 +975,7 @@ INPUT RULES:
 - Mike Conarton is the Fresno/Bakersfield primary only during a live Fresno/Bakersfield coverage week; otherwise he remains in Arizona/Las Vegas.
 - Jarret Beck follows the Monday/Tuesday Dallas-Fort Worth, Wednesday Austin with San Antonio/south fallback, and Friday Houston with Dallas-Fort Worth fallback rotation enforced by Tool #50. His blockers must be honored, and return-home optimization is not used between his regional appointments.
 - Ross P is eligible only after a same-day prior Returning to Install Security Products appointment within one hour. An empty Ross day remains reserved for return installs.
+- When a proposed appointment would be the final customer stop and ends at or after 4:00 PM, Tool #50 rejects it if it leaves the consultant more than 10 driving minutes farther from home than the preceding appointment. Jarret and verified temporary coverage are exempt.
 - If Tool #50 returns "Outside service area" for a valid ZIP, state that the ZIP is outside the approved Den Defenders sales service area. Do not ask for a street address or expose a consultant roster.
 - If Tool #50 cannot confidently resolve a territory, ask for the full street address, city, state, and ZIP. Never show its internal company-wide consultant roster.
 - If the user specifies a starting date, pass it as startDate.

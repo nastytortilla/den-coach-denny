@@ -270,6 +270,7 @@ ROUTING RULES
 - Favor days where appointments are grouped within approximately the same 50-mile area.
 - Prefer placing a new appointment near the consultant's existing appointments for that day.
 - Direct drive time from the actual prior appointment must be 70 minutes or less for a ZIP owner and 40 minutes or less for a non-owner crossing into that ZIP. Ross keeps his separate 60-minute Returning-to-Install rule.
+- If a proposed appointment would be the final customer stop and ends at or after 4:00 PM, reject it when the proposed stop would leave the consultant more than 10 driving minutes farther from home than the preceding customer appointment. Jarret and verified temporary coverage that ignores the permanent home base are exempt.
 - A consultant with existing customer work that day is not eligible before the first prior appointment and cannot qualify through a later appointment.
 - There is no maximum drive-time limit from home to the first appointment of a route segment.
 - The first appointment must still be inside the consultant's territory.
