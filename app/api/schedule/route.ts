@@ -471,6 +471,39 @@ function summarizeCustomerAppointment(
     : timeText;
 }
 
+function formatRouteImprovementSuggestion(payload: any) {
+  const suggestion = Array.isArray(payload?.routeImprovementSuggestions)
+    ? payload.routeImprovementSuggestions[0]
+    : null;
+  if (!suggestion) return null;
+
+  const existing = suggestion?.existingAppointment || {};
+  const moved = suggestion?.proposedMove || {};
+  const opening = suggestion?.requestedAppointmentOpening || {};
+  const timeZone = "America/Los_Angeles";
+  const currentDate = formatOptionDate(existing?.currentDate);
+  const currentStart = formatClockTime(existing?.currentStart, timeZone);
+  const currentEnd = formatClockTime(existing?.currentEnd, timeZone);
+  const movedDate = formatOptionDate(moved?.date);
+  const movedStart = formatClockTime(moved?.start, timeZone);
+  const movedEnd = formatClockTime(moved?.end, timeZone);
+  const openingDate = formatOptionDate(opening?.date);
+  const openingStart = formatClockTime(opening?.start, timeZone);
+  const openingEnd = formatClockTime(opening?.end, timeZone);
+  const location = customerEventLocation({ location: existing?.location });
+  const appointmentLabel = [
+    existing?.jobTypeName || "Washington sales appointment",
+    existing?.jobNumber ? `job ${existing.jobNumber}` : null,
+  ].filter(Boolean).join(" ");
+
+  return [
+    "Suggested Northwest route improvement:",
+    `- Ask whether Ross's ${appointmentLabel} on ${currentDate}, ${currentStart}-${currentEnd}${location ? ` in ${location}` : ""}, can move to ${movedDate}, ${movedStart}-${movedEnd}.`,
+    `- If that customer approves, ${openingDate}, ${openingStart}-${openingEnd} becomes a route-validated opening for this request.`,
+    "- Nothing has been moved or booked. Recheck both openings in live ServiceTitan immediately before making the change.",
+  ].join("\n");
+}
+
 function toolConfirmsSalesServiceArea(
   payload: any
 ) {
@@ -599,6 +632,12 @@ function formatConciseSchedulerReply(
     }
   });
 
+  const routeImprovement = formatRouteImprovementSuggestion(payload);
+  if (routeImprovement) {
+    lines.push("");
+    lines.push(routeImprovement);
+  }
+
   return lines.join("\n");
 }
 
@@ -651,8 +690,24 @@ function formatNoOptionsReply(
   const rejected = Array.isArray(payload?.diagnostics?.sampleRejectedRouteCandidates)
     ? payload.diagnostics.sampleRejectedRouteCandidates
     : [];
+  const eligibleConsultants = new Set<string>([
+    ...(Array.isArray(payload?.territoryResolution?.consultants)
+      ? payload.territoryResolution.consultants
+      : []),
+    ...(Array.isArray(payload?.territoryResolution?.temporaryConsultantCandidates)
+      ? payload.territoryResolution.temporaryConsultantCandidates
+      : []),
+    ...(Array.isArray(payload?.temporaryConsultantCandidates)
+      ? payload.temporaryConsultantCandidates
+      : []),
+  ].map((name: unknown) => String(name || "").trim()).filter(Boolean));
+  const scopedRejected = eligibleConsultants.size
+    ? rejected.filter((item: any) =>
+        eligibleConsultants.has(String(item?.consultantName || "").trim())
+      )
+    : rejected;
   const reasons: string[] = Array.from(new Set<string>(
-    rejected
+    scopedRejected
       .map((item: any) => String(item?.reason || "").trim())
       .filter(Boolean)
   )).slice(0, 3);
@@ -660,6 +715,11 @@ function formatNoOptionsReply(
     lines.push(`Why: ${reasons.join(" ")}`);
   } else {
     lines.push("The available consultants did not have a territory-, calendar-, and route-safe opening that matched the request.");
+  }
+  const routeImprovement = formatRouteImprovementSuggestion(payload);
+  if (routeImprovement) {
+    lines.push("");
+    lines.push(routeImprovement);
   }
   return lines.join("\n");
 }
@@ -1259,7 +1319,8 @@ INPUT RULES:
 - Nick Rendon is not eligible for sales scheduling.
 - Mike Conarton is the Fresno/Bakersfield primary only during a live Fresno/Bakersfield coverage week; otherwise he remains in Arizona/Las Vegas.
 - Jarret Beck follows the normal weekday rotation enforced by Tool #50, but a live regional marker is an exact-date override, including Thursday. His blockers must be honored, and return-home optimization is not used between his regional appointments.
-- Ross P normally requires a same-day prior Returning to Install Security Products appointment within one hour. A live WASHINGTON / OREGON marker authorizes empty-day Northwest sales: Washington Monday-Wednesday and Oregon Wednesday-Friday. Drive home remains a hard no-work day.
+- Ross P normally requires a same-day prior Returning to Install Security Products appointment within one hour. A live WASHINGTON / OREGON marker authorizes empty-day Northwest sales on covered Monday-Friday dates. Prefer a compact north-to-south sequence from Seattle/Puget Sound through Vancouver/Portland and into Oregon, and allow the trip to finish early when practical. Drive home remains a hard no-work day.
+- Tool #50 may return a Northwest route-improvement suggestion that proposes moving an existing sales appointment. Such a suggestion is advisory only, requires customer approval, and must never be described as already moved or booked.
 - When a proposed appointment would be the final customer stop and ends at or after 4:00 PM, Tool #50 rejects it if it leaves the consultant more than 10 driving minutes farther from home than the preceding appointment. Jarret and verified temporary coverage are exempt.
 - If Tool #50 returns "Outside service area" for a valid ZIP, state that the ZIP is outside the approved Den Defenders sales service area. Do not ask for a street address or expose a consultant roster.
 - If Tool #50 cannot confidently resolve a territory, ask for the full street address, city, state, and ZIP. Never show its internal company-wide consultant roster.

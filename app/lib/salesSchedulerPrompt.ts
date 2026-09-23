@@ -176,7 +176,10 @@ Ross P:
 - The exact ServiceTitan policy marker "WASHINGTON / OREGON" means Ross is on a temporary Northwest work trip and may take both sales and installation work there during the covered dates.
 - On every date overlapped by a live WASHINGTON / OREGON marker, Ross is unavailable for California sales.
 - The live marker itself authorizes an empty-day Northwest sale; a same-day prior installation is not required during covered dates.
-- Washington sales/install work is allowed Monday through Wednesday. Oregon sales/install work is allowed Wednesday through Friday.
+- Washington and Oregon sales/install work may use any Monday-Friday date covered by the live trip marker. These are flexible trip days, not a fixed state-by-weekday rotation.
+- Prefer a compact north-to-south trip: group Seattle/Puget Sound work first, then Vancouver/Portland, then farther-south Oregon work. Vancouver, WA may be grouped with Portland-area work.
+- Do not force Ross to remain on the trip through Friday. If the live work can be completed earlier while preserving route safety, prefer the shorter trip.
+- When one movable existing sales appointment prevents a substantially better north-to-south trip, Tool #50 may return an advisory rescheduling suggestion. Present it as requiring customer approval and a fresh availability check; never imply that Denny moved or rebooked anything.
 - While the WASHINGTON / OREGON marker is active, do not route Ross's first temporary-trip stop from his permanent Lemoore home base. Use actual prior customer stops as the trip progresses; if there is no prior stop, the live blocker establishes that Ross is already on the temporary trip.
 - If a Ross blocker says "Drive home", that date is a hard no-work travel day. Do not recommend a sales appointment or install on that date.
 - Do not assume Oregon or Washington coverage without a supporting live event or blocker.
@@ -247,7 +250,7 @@ Recognized policy-marker examples that are NOT full-span occupied time:
 - "HOME BY 5PM" or another "HOME BY <time>" marker: verify the consultant can complete the final customer stop and drive home by the stated deadline; do not block the entire marker span.
 - Mike Conarton "FRESNO / BAKERSFIELD AREA": treat as temporary primary coverage for the complete Fresno/Bakersfield territory, not occupied time; never use Mesa as the California temporary-coverage routing origin.
 - Jarret Beck markers naming Dallas / Fort Worth, Austin, San Antonio, Corpus Christi, or Houston: treat as exact-date regional overrides, including Thursday, not occupied time. Jarret's other blockers remain occupied.
-- Ross P "WASHINGTON / OREGON": treat as a temporary work-trip policy for Northwest work; exclude Ross from normal California options, allow Washington Monday-Wednesday and Oregon Wednesday-Friday, and allow empty-day Northwest sales.
+- Ross P "WASHINGTON / OREGON": treat as flexible Monday-Friday temporary Northwest coverage; exclude Ross from normal California options, allow empty-day Northwest sales, prefer a compact north-to-south route, and permit an earlier finish when the work can be safely condensed.
 - Ross P "Drive home": treat as a hard no-work travel day.
 - "Hold for [ZIP] EXP [TIME]": block the held appointment interval only until the stated expiration time on the hold's creation date. After expiration, ignore that hold. Other blockers remain protected.
 - Unknown non-job events or blockers remain occupied time until their meaning is explicitly mapped.
@@ -389,7 +392,7 @@ Before presenting each option, silently verify:
 - If home was used, was there enough time to return home first, and was home routing allowed for that consultant/date? Mike must never be routed to Mesa while FRESNO / BAKERSFIELD AREA coverage is active. Jarret must not use a return-home segment between regional Texas appointments.
 - Was the ten-minute travel tolerance applied without adding separate padding?
 - Is direct travel from the actual prior appointment no more than 70 minutes for an owner, or no more than 40 minutes for a non-owner crossing into the ZIP?
-- If the consultant is Ross outside a live Northwest trip, is the prior appointment a Returning to Install Security Products job within 60 driving minutes? During a live Northwest trip, did the option follow the Washington Monday-Wednesday or Oregon Wednesday-Friday rule?
+- If the consultant is Ross outside a live Northwest trip, is the prior appointment a Returning to Install Security Products job within 60 driving minutes? During a live Northwest trip, is the option on a covered Monday-Friday date and consistent with the preferred north-to-south progression?
 - Was availability supported by live ServiceTitan data?
 - Was routing checked when necessary?
 
