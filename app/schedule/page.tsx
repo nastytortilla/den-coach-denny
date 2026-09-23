@@ -242,7 +242,27 @@ export default function SchedulePage() {
         onChange={(event) =>
           setInput(event.target.value)
         }
+        onKeyDown={(event) => {
+          if (
+            event.key === "Enter" &&
+            !event.shiftKey &&
+            !event.nativeEvent.isComposing
+          ) {
+            event.preventDefault();
+            void askDenny();
+          }
+        }}
+        aria-keyshortcuts="Enter"
       />
+      <div
+        style={{
+          marginTop: 6,
+          fontSize: 13,
+          opacity: 0.7,
+        }}
+      >
+        Press Enter to submit. Use Shift+Enter for a new line.
+      </div>
       <div
         style={{
           marginTop: 12,
