@@ -75,6 +75,207 @@ function addDateOnlyDays(
   return date.toISOString().slice(0, 10);
 }
 
+type CustomerSchedulingConstraints = {
+  requestedDates: string[];
+  requestedWeekdays: string[];
+  earliestStartTime?: string;
+  latestStartTime?: string;
+};
+
+const WEEKDAY_INDEX: Record<string, number> = {
+  sunday: 0,
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+};
+
+function pacificDateString() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const get = (type: string) =>
+    parts.find((part) => part.type === type)?.value || "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+function normalizeRequestedClock(
+  hourText: string,
+  minuteText: string | undefined,
+  periodText: string | undefined
+) {
+  let hour = Number(hourText);
+  const minute = Number(minuteText || 0);
+  const period = String(periodText || "")
+    .replace(/\./g, "")
+    .toLowerCase();
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23 || minute > 59) {
+    return null;
+  }
+  if (period) {
+    if (hour < 1 || hour > 12) return null;
+    if (period === "pm" && hour !== 12) hour += 12;
+    if (period === "am" && hour === 12) hour = 0;
+  } else if (hour === 12) {
+    hour = 12;
+  } else if (hour >= 1 && hour <= 7) {
+    // Sales hours make an unqualified "after 1" naturally mean 1:00 PM.
+    hour += 12;
+  }
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function nextRequestedWeekday(
+  weekday: string,
+  baseDate: string
+) {
+  const target = WEEKDAY_INDEX[weekday.toLowerCase()];
+  const base = new Date(`${baseDate}T12:00:00.000Z`);
+  const delta = (target - base.getUTCDay() + 7) % 7;
+  return addDateOnlyDays(baseDate, delta);
+}
+
+function schedulingConstraintsFromText(
+  text: string
+): CustomerSchedulingConstraints {
+  const constraints: CustomerSchedulingConstraints = {
+    requestedDates: [],
+    requestedWeekdays: [],
+  };
+  const source = String(text || "");
+  const today = pacificDateString();
+
+  const earliest = source.match(
+    /\b(?:only\s+)?(?:after|at\s+or\s+after|no\s+earlier\s+than)\s+(\d{1,2})(?::([0-5]\d))?\s*(a\.?m\.?|p\.?m\.?)?\b/i
+  );
+  if (earliest) {
+    const normalized = normalizeRequestedClock(
+      earliest[1],
+      earliest[2],
+      earliest[3]
+    );
+    if (normalized) constraints.earliestStartTime = normalized;
+  }
+
+  const latest = source.match(
+    /\b(?:only\s+)?(?:before|at\s+or\s+before|no\s+later\s+than)\s+(\d{1,2})(?::([0-5]\d))?\s*(a\.?m\.?|p\.?m\.?)?\b/i
+  );
+  if (latest) {
+    const normalized = normalizeRequestedClock(
+      latest[1],
+      latest[2],
+      latest[3]
+    );
+    if (normalized) constraints.latestStartTime = normalized;
+  }
+
+  const relativeWeekday = source.match(
+    /\b(?:this|next)\s+(monday|tuesday|wednesday|thursday|friday)\b/i
+  );
+  if (relativeWeekday) {
+    constraints.requestedDates.push(
+      nextRequestedWeekday(relativeWeekday[1], today)
+    );
+  } else {
+    const weekdayOnly = source.match(
+      /\b(?:only\s+(?:on\s+)?(monday|tuesday|wednesday|thursday|friday)|(monday|tuesday|wednesday|thursday|friday)s?\s+only)\b/i
+    );
+    const weekday = weekdayOnly?.[1] || weekdayOnly?.[2];
+    if (weekday) {
+      constraints.requestedWeekdays.push(
+        weekday.charAt(0).toUpperCase() + weekday.slice(1).toLowerCase()
+      );
+    }
+  }
+
+  const namedDate = source.match(
+    /\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?\b/i
+  );
+  if (namedDate) {
+    const month = MONTH_NUMBER[namedDate[1].toLowerCase()];
+    const day = namedDate[2].padStart(2, "0");
+    let year = Number(namedDate[3] || today.slice(0, 4));
+    let resolved = `${year}-${month}-${day}`;
+    if (!namedDate[3] && resolved < today) {
+      year += 1;
+      resolved = `${year}-${month}-${day}`;
+    }
+    if (Number.isFinite(new Date(`${resolved}T12:00:00.000Z`).getTime())) {
+      constraints.requestedDates = [resolved];
+      constraints.requestedWeekdays = [];
+    }
+  }
+
+  const numericDate = source.match(
+    /\b(1[0-2]|0?[1-9])[\/-](3[01]|[12]\d|0?[1-9])(?:[\/-](\d{4}))?\b/
+  );
+  if (!namedDate && numericDate) {
+    const month = numericDate[1].padStart(2, "0");
+    const day = numericDate[2].padStart(2, "0");
+    let year = Number(numericDate[3] || today.slice(0, 4));
+    let resolved = `${year}-${month}-${day}`;
+    if (!numericDate[3] && resolved < today) {
+      year += 1;
+      resolved = `${year}-${month}-${day}`;
+    }
+    if (Number.isFinite(new Date(`${resolved}T12:00:00.000Z`).getTime())) {
+      constraints.requestedDates = [resolved];
+      constraints.requestedWeekdays = [];
+    }
+  }
+
+  return constraints;
+}
+
+function extractCustomerSchedulingConstraints(
+  messages: ConversationMessage[]
+) {
+  const userMessages = messages.filter(
+    (message) => message.role === "user"
+  );
+  const latest = userMessages[userMessages.length - 1];
+  if (!latest) return schedulingConstraintsFromText("");
+  if (!/^next\s*3\s*options[.!]?$/i.test(latest.content.trim())) {
+    return schedulingConstraintsFromText(latest.content);
+  }
+  for (let index = userMessages.length - 2; index >= 0; index--) {
+    const parsed = schedulingConstraintsFromText(userMessages[index].content);
+    if (
+      parsed.requestedDates.length ||
+      parsed.requestedWeekdays.length ||
+      parsed.earliestStartTime ||
+      parsed.latestStartTime
+    ) {
+      return parsed;
+    }
+  }
+  return schedulingConstraintsFromText("");
+}
+
+function applyCustomerSchedulingConstraints(
+  args: Record<string, unknown>,
+  constraints: CustomerSchedulingConstraints
+) {
+  if (constraints.requestedDates.length) {
+    args.requestedDates = constraints.requestedDates;
+    if (!args.startDate) args.startDate = constraints.requestedDates[0];
+  }
+  if (constraints.requestedWeekdays.length) {
+    args.requestedWeekdays = constraints.requestedWeekdays;
+  }
+  if (constraints.earliestStartTime) {
+    args.earliestStartTime = constraints.earliestStartTime;
+  }
+  if (constraints.latestStartTime) {
+    args.latestStartTime = constraints.latestStartTime;
+  }
+}
+
 function latestPresentedOptionDate(
   messages: ConversationMessage[]
 ) {
@@ -398,6 +599,68 @@ function formatConciseSchedulerReply(
     }
   });
 
+  return lines.join("\n");
+}
+
+function formatNoOptionsReply(
+  payload: any,
+  zipResolution: ZipResolution | null,
+  includeZipIntro: boolean
+) {
+  const options = Array.isArray(payload?.options)
+    ? payload.options
+    : [];
+  if (options.length) return null;
+  if (!String(payload?.recommendationStatus || "").toLowerCase().includes("no route-safe")) {
+    return null;
+  }
+
+  const lines: string[] = [];
+  if (
+    includeZipIntro &&
+    zipResolution &&
+    toolConfirmsSalesServiceArea(payload)
+  ) {
+    lines.push(
+      `${zipResolution.zip} is ${zipResolution.city}, ${zipResolution.stateAbbreviation}, and it is in our service area.`
+    );
+    lines.push("");
+  }
+
+  const constraints = payload?.customerRequestedConstraints || {};
+  const constraintParts: string[] = [];
+  if (Array.isArray(constraints.requestedDates) && constraints.requestedDates.length) {
+    constraintParts.push(`the requested date ${constraints.requestedDates.join(", ")}`);
+  }
+  if (Array.isArray(constraints.requestedWeekdays) && constraints.requestedWeekdays.length) {
+    constraintParts.push(`${constraints.requestedWeekdays.join(" or ")} only`);
+  }
+  if (constraints.earliestStartTime) {
+    constraintParts.push(`starts at or after ${constraints.earliestStartTime}`);
+  }
+  if (constraints.latestStartTime) {
+    constraintParts.push(`starts at or before ${constraints.latestStartTime}`);
+  }
+
+  lines.push(
+    constraintParts.length
+      ? `I couldn't find a valid appointment matching ${constraintParts.join(", ")}.`
+      : "I couldn't find a valid appointment in the search period."
+  );
+
+  const rejected = Array.isArray(payload?.diagnostics?.sampleRejectedRouteCandidates)
+    ? payload.diagnostics.sampleRejectedRouteCandidates
+    : [];
+  const reasons: string[] = Array.from(new Set<string>(
+    rejected
+      .map((item: any) => String(item?.reason || "").trim())
+      .filter(Boolean)
+  )).slice(0, 3);
+  if (reasons.length) {
+    lines.push(`Why: ${reasons.join(" ")}`);
+  } else {
+    lines.push("The available consultants did not have a territory-, calendar-, and route-safe opening that matched the request.");
+  }
   return lines.join("\n");
 }
 
@@ -756,6 +1019,9 @@ export async function POST(req: Request) {
     const explanationFollowUp =
       isExplanationFollowUp(conversation);
 
+    const customerSchedulingConstraints =
+      extractCustomerSchedulingConstraints(conversation);
+
     const tokenResponse =
       await auth0.getAccessToken();
 
@@ -781,7 +1047,7 @@ export async function POST(req: Request) {
       zipResolution &&
       !explanationFollowUp &&
       (
-        latestUserMessageIsBareZip(conversation) ||
+        zipWasEnteredThisTurn ||
         nextThreeRequest
       )
     );
@@ -813,6 +1079,11 @@ export async function POST(req: Request) {
         directArguments.startDate =
           nextThreeStartDate;
       }
+
+      applyCustomerSchedulingConstraints(
+        directArguments,
+        customerSchedulingConstraints
+      );
 
       const directToolResult =
         await mcpClient.callTool(
@@ -888,6 +1159,20 @@ export async function POST(req: Request) {
       if (conciseReply) {
         return NextResponse.json({
           reply: conciseReply,
+        });
+      }
+
+      const noOptionsReply = directPayload
+        ? formatNoOptionsReply(
+            directPayload,
+            zipResolution,
+            zipWasEnteredThisTurn
+          )
+        : null;
+
+      if (noOptionsReply) {
+        return NextResponse.json({
+          reply: noOptionsReply,
         });
       }
 
@@ -973,12 +1258,13 @@ INPUT RULES:
 - ZIP ownership comes from the Den Coach Zip Assignments workbook. A non-owner may qualify only from an actual same-day prior customer appointment within 40 driving minutes; Tool #50 compares qualifying routes and chooses the closest consultant for that date.
 - Nick Rendon is not eligible for sales scheduling.
 - Mike Conarton is the Fresno/Bakersfield primary only during a live Fresno/Bakersfield coverage week; otherwise he remains in Arizona/Las Vegas.
-- Jarret Beck follows the Monday/Tuesday Dallas-Fort Worth, Wednesday Austin with San Antonio/south fallback, and Friday Houston with Dallas-Fort Worth fallback rotation enforced by Tool #50. His blockers must be honored, and return-home optimization is not used between his regional appointments.
-- Ross P is eligible only after a same-day prior Returning to Install Security Products appointment within one hour. An empty Ross day remains reserved for return installs.
+- Jarret Beck follows the normal weekday rotation enforced by Tool #50, but a live regional marker is an exact-date override, including Thursday. His blockers must be honored, and return-home optimization is not used between his regional appointments.
+- Ross P normally requires a same-day prior Returning to Install Security Products appointment within one hour. A live WASHINGTON / OREGON marker authorizes empty-day Northwest sales: Washington Monday-Wednesday and Oregon Wednesday-Friday. Drive home remains a hard no-work day.
 - When a proposed appointment would be the final customer stop and ends at or after 4:00 PM, Tool #50 rejects it if it leaves the consultant more than 10 driving minutes farther from home than the preceding appointment. Jarret and verified temporary coverage are exempt.
 - If Tool #50 returns "Outside service area" for a valid ZIP, state that the ZIP is outside the approved Den Defenders sales service area. Do not ask for a street address or expose a consultant roster.
 - If Tool #50 cannot confidently resolve a territory, ask for the full street address, city, state, and ZIP. Never show its internal company-wide consultant roster.
 - If the user specifies a starting date, pass it as startDate.
+- If the user requests a specific date, weekday, earliest time, or latest time, pass requestedDates, requestedWeekdays, earliestStartTime, and latestStartTime exactly as applicable. Never return an option outside those customer constraints.
 - If the user does not specify a starting date, omit startDate and let Tool #50 use the current Pacific business date.
 - If the user asks for a specific number of options, pass that number as maxRecommendations. Otherwise request 3.
 
@@ -1233,6 +1519,11 @@ Once recommend_sales_schedule has returned successfully during the current reque
           toolArguments.maxRecommendations = 3;
           delete toolArguments.endDate;
         }
+
+        applyCustomerSchedulingConstraints(
+          toolArguments,
+          customerSchedulingConstraints
+        );
 
         delete toolArguments.consultantNames;
 
