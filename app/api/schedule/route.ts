@@ -183,7 +183,7 @@ function schedulingConstraintsFromText(
     );
   } else {
     const weekdayOnly = source.match(
-      /\b(?:only\s+(?:on\s+)?(monday|tuesday|wednesday|thursday|friday)|(monday|tuesday|wednesday|thursday|friday)s?\s+only)\b/i
+      /\b(?:only\s+(?:on\s+)?(monday|tuesday|wednesday|thursday|friday)s?|(monday|tuesday|wednesday|thursday|friday)s?\s+only)\b/i
     );
     const weekday = weekdayOnly?.[1] || weekdayOnly?.[2];
     if (weekday) {
