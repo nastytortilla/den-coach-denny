@@ -36,7 +36,7 @@ export default function DenShell({ title, subtitle, children, theme = "home" }: 
           <Link href="/" className="den-brand" aria-label="Den Coach Denny home">
             <Image className="den-logo" src="/brand/den-logo.png" alt="Den Defenders Security Doors" width={190} height={97} priority />
             <span className="brand-divider" aria-hidden="true" />
-            <Image className="den-avatar" src="/brand/denny.png" alt="Coach Denny" width={68} height={68} priority />
+            <Image className="den-avatar" src="/brand/denny-avatar.png" alt="Coach Denny" width={68} height={68} priority />
             <span className="brand-copy">
               <strong>Den Coach Denny</strong>
               <span>Your AI teammate for faster answers, better calls, and smarter scheduling.</span>
