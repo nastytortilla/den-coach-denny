@@ -3,9 +3,25 @@
 import { useState } from "react";
 import Image from "next/image";
 import DenShell from "../components/DenShell";
+import salesZipDirectory from "../lib/salesZipDirectory.json";
 
 type ConversationMessage = { role: "user" | "assistant"; content: string };
+type ZipDirectory = Record<string, string[]>;
 const NEXT_OPTIONS_MESSAGE = "Next 3 Options";
+const SERVICE_ZIPS = salesZipDirectory as ZipDirectory;
+
+function immediateZipReply(message: string) {
+  const zip = message.match(/\b(\d{5})(?:-\d{4})?\b/)?.[1];
+  if (!zip) return "";
+
+  const location = SERVICE_ZIPS[zip];
+  if (!location) {
+    return `${zip} is outside the approved Den Defenders sales service area.`;
+  }
+
+  const [city, state] = location;
+  return `${zip} is ${city}, ${state}, and it is in our service area.`;
+}
 
 export default function SchedulePage() {
   const [input, setInput] = useState("");
@@ -13,6 +29,7 @@ export default function SchedulePage() {
   const [consultantChoices, setConsultantChoices] = useState<string[]>([]);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
+  const [pendingZipReply, setPendingZipReply] = useState("");
   const hasAssistantReply = conversation.some((message) => message.role === "assistant");
 
   function errorMessage(error: unknown) {
@@ -24,8 +41,10 @@ export default function SchedulePage() {
     if (!trimmedInput || loading) return;
     const userMessage: ConversationMessage = { role: "user", content: trimmedInput };
     const nextConversation = [...conversation, userMessage];
+    const quickReply = conversation.length === 0 ? immediateZipReply(trimmedInput) : "";
     setConversation(nextConversation); setInput(""); setConsultantChoices([]);
-    setStatus("Checking territories, sales schedules, drive times, and routing rules..."); setLoading(true);
+    setPendingZipReply(quickReply);
+    setStatus(quickReply ? "Finding the three best appointment options..." : "Checking territories, sales schedules, drive times, and routing rules..."); setLoading(true);
     try {
       const response = await fetch("/api/schedule", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -37,7 +56,7 @@ export default function SchedulePage() {
       if (!response.ok) { setStatus(`Error: ${data.error || "Request failed"}\n${data.details || ""}`); return; }
       const assistantMessage: ConversationMessage = { role: "assistant", content: data.reply || "No reply returned." };
       const choices = Array.isArray(data.consultantChoices) ? data.consultantChoices.map((choice: unknown) => String(choice || "").trim()).filter(Boolean) : [];
-      setConversation([...nextConversation, assistantMessage]); setConsultantChoices(choices); setStatus("");
+      setPendingZipReply(""); setConversation([...nextConversation, assistantMessage]); setConsultantChoices(choices); setStatus("");
     } catch (error: unknown) { setStatus(`Error: ${errorMessage(error)}`); }
     finally { setLoading(false); }
   }
@@ -45,7 +64,7 @@ export default function SchedulePage() {
   async function askDenny() { await submitMessage(input); }
   async function nextThreeOptions() { if (hasAssistantReply && !loading) await submitMessage(NEXT_OPTIONS_MESSAGE); }
   async function chooseConsultant(name: string) { await submitMessage(`Use ${name} for this location.`); }
-  function startNewSearch() { setConversation([]); setInput(""); setConsultantChoices([]); setStatus(""); setLoading(false); }
+  function startNewSearch() { setConversation([]); setInput(""); setConsultantChoices([]); setPendingZipReply(""); setStatus(""); setLoading(false); }
 
   return (
     <DenShell title="Denny’s Smart Scheduler" subtitle="Find the best sales consultant, date, and time" theme="schedule">
@@ -88,6 +107,12 @@ export default function SchedulePage() {
                 <pre>{message.content}</pre>
               </article>
             ))}
+            {pendingZipReply && (
+              <article className="message message-assistant">
+                <strong>Denny</strong>
+                <pre>{pendingZipReply}</pre>
+              </article>
+            )}
           </div>}
 
           {consultantChoices.length > 0 && <div className="consultant-box">
