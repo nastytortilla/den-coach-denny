@@ -245,15 +245,7 @@ export default function TalkToCoachDenny({
   }
 
   return (
-    <div
-      style={{
-        marginTop: 18,
-        padding: 14,
-        border: "1px solid #000",
-        borderRadius: 8,
-        background: "#f7f7f7",
-      }}
-    >
+    <div className="voice-card">
       <h3 style={{ marginTop: 0, marginBottom: 8 }}>
         Talk to Coach Denny
       </h3>
@@ -263,21 +255,13 @@ export default function TalkToCoachDenny({
         the transcript and feedback as context.
       </p>
 
-      <div
-        style={{
-          display: "flex",
-          gap: 10,
-          alignItems: "center",
-          flexWrap: "wrap",
-          marginTop: 10,
-        }}
-      >
+      <div className="voice-actions">
         {!isConnected ? (
           <button
             type="button"
             disabled={isWorking}
             onClick={startVoiceChat}
-            className="den-link"
+            className="btn btn-teal"
             style={{
               cursor: isWorking ? "not-allowed" : "pointer",
               opacity: isWorking ? 0.7 : 1,
@@ -289,7 +273,7 @@ export default function TalkToCoachDenny({
           <button
             type="button"
             onClick={stopVoiceChat}
-            className="den-link"
+            className="btn btn-coral"
             style={{
               cursor: "pointer",
             }}

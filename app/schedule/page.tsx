@@ -1,321 +1,113 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import DenShell from "../components/DenShell";
 
-type ConversationMessage = {
-  role: "user" | "assistant";
-  content: string;
-};
-
-const DEFAULT_SEARCH =
-  "Find the earliest three sales appointment options for a customer in [ZIP code, city, or address].";
-
+type ConversationMessage = { role: "user" | "assistant"; content: string };
 const NEXT_OPTIONS_MESSAGE = "Next 3 Options";
 
 export default function SchedulePage() {
-  const [input, setInput] = useState(DEFAULT_SEARCH);
-  const [conversation, setConversation] =
-    useState<ConversationMessage[]>([]);
-  const [consultantChoices, setConsultantChoices] =
-    useState<string[]>([]);
+  const [input, setInput] = useState("");
+  const [conversation, setConversation] = useState<ConversationMessage[]>([]);
+  const [consultantChoices, setConsultantChoices] = useState<string[]>([]);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
-  const hasAssistantReply = conversation.some(
-    (message) => message.role === "assistant"
-  );
+  const hasAssistantReply = conversation.some((message) => message.role === "assistant");
+
+  function errorMessage(error: unknown) {
+    return error instanceof Error ? error.message : "Request failed";
+  }
 
   async function submitMessage(messageText: string) {
     const trimmedInput = messageText.trim();
-
-    if (!trimmedInput || loading) {
-      return;
-    }
-
-    const userMessage: ConversationMessage = {
-      role: "user",
-      content: trimmedInput,
-    };
+    if (!trimmedInput || loading) return;
+    const userMessage: ConversationMessage = { role: "user", content: trimmedInput };
     const nextConversation = [...conversation, userMessage];
-
-    setConversation(nextConversation);
-    setInput("");
-    setConsultantChoices([]);
-    setStatus("Checking sales schedules and routes...");
-    setLoading(true);
-
+    setConversation(nextConversation); setInput(""); setConsultantChoices([]);
+    setStatus("Checking territories, sales schedules, drive times, and routing rules..."); setLoading(true);
     try {
-      const res = await fetch("/api/schedule", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messages: nextConversation,
-        }),
+      const response = await fetch("/api/schedule", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: nextConversation }),
       });
-
-      const text = await res.text();
-      let data: any = {};
-
-      try {
-        data = text ? JSON.parse(text) : {};
-      } catch {
-        data = {
-          error: "Server returned non-JSON",
-          details: text,
-        };
-      }
-
-      if (!res.ok) {
-        setStatus(
-          `Error: ${data.error || "Request failed"}\n${
-            data.details || ""
-          }`
-        );
-        return;
-      }
-
-      const assistantMessage: ConversationMessage = {
-        role: "assistant",
-        content: data.reply || "No reply returned.",
-      };
-
-      const returnedConsultantChoices = Array.isArray(
-        data.consultantChoices
-      )
-        ? data.consultantChoices
-            .map((choice: unknown) =>
-              String(choice || "").trim()
-            )
-            .filter(Boolean)
-        : [];
-
-      setConversation([
-        ...nextConversation,
-        assistantMessage,
-      ]);
-
-      setConsultantChoices(
-        returnedConsultantChoices
-      );
-
-      setStatus("");
-    } catch (error: any) {
-      setStatus(
-        `Error: ${
-          error?.message || "Request failed"
-        }`
-      );
-    } finally {
-      setLoading(false);
-    }
+      const text = await response.text();
+      let data: { reply?: string; error?: string; details?: string; consultantChoices?: unknown[] } = {};
+      try { data = text ? JSON.parse(text) : {}; } catch { data = { error: "Server returned non-JSON", details: text }; }
+      if (!response.ok) { setStatus(`Error: ${data.error || "Request failed"}\n${data.details || ""}`); return; }
+      const assistantMessage: ConversationMessage = { role: "assistant", content: data.reply || "No reply returned." };
+      const choices = Array.isArray(data.consultantChoices) ? data.consultantChoices.map((choice: unknown) => String(choice || "").trim()).filter(Boolean) : [];
+      setConversation([...nextConversation, assistantMessage]); setConsultantChoices(choices); setStatus("");
+    } catch (error: unknown) { setStatus(`Error: ${errorMessage(error)}`); }
+    finally { setLoading(false); }
   }
 
-  async function askDenny() {
-    await submitMessage(input);
-  }
-
-  async function nextThreeOptions() {
-    if (!hasAssistantReply || loading) {
-      return;
-    }
-
-    await submitMessage(NEXT_OPTIONS_MESSAGE);
-  }
-
-  async function chooseConsultant(
-    consultantName: string
-  ) {
-    await submitMessage(
-      `Use ${consultantName} for this location.`
-    );
-  }
-
-  function startNewSearch() {
-    setConversation([]);
-    setInput(DEFAULT_SEARCH);
-    setConsultantChoices([]);
-    setStatus("");
-    setLoading(false);
-  }
+  async function askDenny() { await submitMessage(input); }
+  async function nextThreeOptions() { if (hasAssistantReply && !loading) await submitMessage(NEXT_OPTIONS_MESSAGE); }
+  async function chooseConsultant(name: string) { await submitMessage(`Use ${name} for this location.`); }
+  function startNewSearch() { setConversation([]); setInput(""); setConsultantChoices([]); setStatus(""); setLoading(false); }
 
   return (
-    <DenShell
-      title="Denny’s Smart Scheduler"
-      subtitle="Find the best sales consultant, date, and time"
-    >
-      {conversation.length > 0 && (
-        <div style={{ marginBottom: 24 }}>
-          <h3 style={{ marginTop: 0 }}>
-            Scheduling Conversation
-          </h3>
-          {conversation.map((message, index) => (
-            <div
-              key={`${message.role}-${index}`}
-              style={{
-                marginTop: 16,
-                paddingTop: 14,
-                borderTop:
-                  index === 0
-                    ? "none"
-                    : "1px solid rgba(0, 0, 0, 0.15)",
+    <DenShell title="Denny’s Smart Scheduler" subtitle="Find the best sales consultant, date, and time" theme="schedule">
+      <section className="schedule-hero">
+        <div className="schedule-copy">
+          <p className="eyebrow">Smarter routes. Better days.</p>
+          <h1 className="display-title">Find the best appointment—<span>fast.</span></h1>
+          <p>Enter a ZIP code, city, or address. Denny checks territories, schedules, drive time, and routing rules.</p>
+        </div>
+        <Image className="schedule-mascot" src="/brand/denny.png" alt="Coach Denny" width={500} height={500} priority />
+      </section>
+
+      <div className="schedule-workspace">
+        <section className="schedule-panel surface">
+          <label className="schedule-input-label" htmlFor="schedule-search">{conversation.length === 0 ? "Where does the customer live?" : "Ask Denny a follow-up question"}</label>
+          <div className="schedule-search">
+            <textarea
+              id="schedule-search"
+              className="den-textarea"
+              value={input}
+              placeholder={conversation.length === 0 ? "Enter ZIP code, city, or address…" : "Ask “Why?” or type another scheduling question…"}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                  event.preventDefault(); void askDenny();
+                }
               }}
-            >
-              <strong>
-                {message.role === "user"
-                  ? "CSR"
-                  : "Denny"}
-              </strong>
-              <pre
-                style={{
-                  marginTop: 8,
-                  whiteSpace: "pre-wrap",
-                  overflowWrap: "anywhere",
-                }}
-              >
-                {message.content}
-              </pre>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {consultantChoices.length > 0 && (
-        <div
-          style={{
-            marginBottom: 20,
-            padding: 14,
-            border: "1px solid rgba(0, 0, 0, 0.18)",
-            borderRadius: 12,
-          }}
-        >
-          <p
-            style={{
-              marginTop: 0,
-              marginBottom: 10,
-              fontWeight: 800,
-            }}
-          >
-            Choose the sales consultant:
-          </p>
-          <div
-            style={{
-              display: "flex",
-              gap: 10,
-              flexWrap: "wrap",
-            }}
-          >
-            {consultantChoices.map(
-              (consultantName) => (
-                <button
-                  key={consultantName}
-                  onClick={() =>
-                    chooseConsultant(
-                      consultantName
-                    )
-                  }
-                  className="den-link"
-                  disabled={loading}
-                >
-                  {consultantName}
-                </button>
-              )
-            )}
+              aria-keyshortcuts="Enter"
+            />
+            <button className="btn btn-coral" onClick={askDenny} disabled={loading || !input.trim()}>{loading ? "Checking…" : conversation.length === 0 ? "Find Options" : "Ask Denny"} <span aria-hidden="true">→</span></button>
           </div>
-        </div>
-      )}
+          <div className="input-hint">Press Enter to search. Use Shift+Enter for a new line.</div>
 
-      <p style={{ marginTop: 0, fontWeight: 800 }}>
-        {conversation.length === 0
-          ? "Enter the customer’s ZIP code, city, or address:"
-          : "Ask Denny a follow-up question:"}
-      </p>
-      <textarea
-        className="den-textarea"
-        value={input}
-        placeholder={
-          conversation.length === 0
-            ? "Find the earliest three sales appointment options for a customer in [ZIP code, city, or address]."
-            : 'Try: "Why?" or click "Next 3 Options" if the customer needs more choices.'
-        }
-        onChange={(event) =>
-          setInput(event.target.value)
-        }
-        onKeyDown={(event) => {
-          if (
-            event.key === "Enter" &&
-            !event.shiftKey &&
-            !event.nativeEvent.isComposing
-          ) {
-            event.preventDefault();
-            void askDenny();
-          }
-        }}
-        aria-keyshortcuts="Enter"
-      />
-      <div
-        style={{
-          marginTop: 6,
-          fontSize: 13,
-          opacity: 0.7,
-        }}
-      >
-        Press Enter to submit. Use Shift+Enter for a new line.
+          {status && <div className="notice" style={{ marginTop: 16 }}>{status}</div>}
+
+          {conversation.length > 0 && <div className="conversation" aria-live="polite">
+            {conversation.map((message, index) => (
+              <article key={`${message.role}-${index}`} className={`message message-${message.role}`}>
+                <strong>{message.role === "user" ? "CSR" : "Denny"}</strong>
+                <pre>{message.content}</pre>
+              </article>
+            ))}
+          </div>}
+
+          {consultantChoices.length > 0 && <div className="consultant-box">
+            <p>This ZIP code has more than one eligible owner. Choose the sales consultant:</p>
+            <div className="consultant-options">{consultantChoices.map((name) => <button key={name} className="btn btn-amber" disabled={loading} onClick={() => chooseConsultant(name)}>{name}</button>)}</div>
+          </div>}
+
+          <div className="schedule-actions">
+            {hasAssistantReply && consultantChoices.length === 0 && <button className="btn btn-coral" disabled={loading} onClick={nextThreeOptions}>Next 3 Options <span aria-hidden="true">→</span></button>}
+            {conversation.length > 0 && <button className="btn btn-outline" disabled={loading} onClick={startNewSearch}>Start New Search</button>}
+          </div>
+        </section>
+
+        <aside className="route-aside">
+          <div className="route-status surface"><span className="route-icon">⌖</span><span><strong>Territory Verified</strong><small>ZIP ownership checked</small></span><span className="route-check">✓</span></div>
+          <div className="route-status surface"><span className="route-icon">↗</span><span><strong>Drive Time Checked</strong><small>Real routes compared</small></span><span className="route-check">✓</span></div>
+          <div className="route-status surface"><span className="route-icon">⌂</span><span><strong>Homeward Routing</strong><small>End-of-day direction applied</small></span><span className="route-check">✓</span></div>
+          <div className="route-note surface"><h2>Smart routing at work</h2><p>Denny checks live schedules, territory rules, drive time, and the route home to find the best choices for the customer.</p></div>
+        </aside>
       </div>
-      <div
-        style={{
-          marginTop: 12,
-          display: "flex",
-          gap: 10,
-          flexWrap: "wrap",
-        }}
-      >
-        <button
-          onClick={askDenny}
-          className="den-link"
-          disabled={loading || !input.trim()}
-        >
-          {loading
-            ? "Checking..."
-            : conversation.length === 0
-              ? "Find Best Appointments"
-              : "Ask Denny"}
-        </button>
-
-        {hasAssistantReply &&
-          consultantChoices.length === 0 && (
-            <button
-              onClick={nextThreeOptions}
-              className="den-link"
-              disabled={loading}
-            >
-              Next 3 Options
-            </button>
-          )}
-
-        {conversation.length > 0 && (
-          <button
-            onClick={startNewSearch}
-            className="den-link"
-            disabled={loading}
-          >
-            Start New Search
-          </button>
-        )}
-      </div>
-
-      {status && (
-        <pre
-          style={{
-            marginTop: 12,
-            whiteSpace: "pre-wrap",
-            overflowWrap: "anywhere",
-          }}
-        >
-          {status}
-        </pre>
-      )}
     </DenShell>
   );
 }

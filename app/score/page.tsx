@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { upload } from "@vercel/blob/client";
 import DenShell from "../components/DenShell";
 import TalkToCoachDenny from "../components/TalkToCoachDenny";
@@ -11,243 +12,100 @@ export default function ScorePage() {
   const [transcript, setTranscript] = useState("");
   const [feedback, setFeedback] = useState("");
   const [loading, setLoading] = useState(false);
-
-  // Post-score Q&A
   const [csrQuestion, setCsrQuestion] = useState("");
   const [followupStatus, setFollowupStatus] = useState("");
   const [followupAnswer, setFollowupAnswer] = useState("");
   const [followupLoading, setFollowupLoading] = useState(false);
 
-  function getErrorMessage(err: unknown) {
-    if (err instanceof Error) {
-      return err.message;
-    }
-
-    return String(err);
-  }
+  function getErrorMessage(error: unknown) { return error instanceof Error ? error.message : String(error); }
 
   async function uploadAndScore() {
-    if (!file) {
-      setStatus("Pick an audio file first.");
-      return;
-    }
-
-    setLoading(true);
-    setStatus("");
-    setTranscript("");
-    setFeedback("");
-
-    // Reset follow-up state
-    setCsrQuestion("");
-    setFollowupStatus("");
-    setFollowupAnswer("");
-
+    if (!file) { setStatus("Choose an audio file first."); return; }
+    setLoading(true); setStatus("Uploading audio..."); setTranscript(""); setFeedback("");
+    setCsrQuestion(""); setFollowupStatus(""); setFollowupAnswer("");
     try {
-      setStatus("Uploading audio...");
-
-      const blob = await upload(file.name, file, {
-        access: "public",
-        handleUploadUrl: "/api/blob/upload",
+      const blob = await upload(file.name, file, { access: "public", handleUploadUrl: "/api/blob/upload" });
+      if (!blob?.url) { setStatus("Upload failed: no blob URL returned."); return; }
+      setStatus("Transcribing and preparing coaching feedback...");
+      const response = await fetch("/api/score-call", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mode: "score", blobUrl: blob.url, callType: "Unknown", goal: "Unknown" }),
       });
-
-      const blobUrl = blob?.url;
-
-      if (!blobUrl) {
-        setStatus("Upload failed: no blob URL returned.");
-        return;
-      }
-
-      setStatus("Transcribing + scoring...");
-
-      const scoreRes = await fetch("/api/score-call", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          mode: "score",
-          blobUrl,
-          callType: "Unknown",
-          goal: "Unknown",
-        }),
-      });
-
-      const scoreData = await scoreRes.json().catch(() => null);
-
-      if (!scoreRes.ok) {
-        setStatus(
-          "Score failed: " + (scoreData?.error || `HTTP ${scoreRes.status}`)
-        );
-        return;
-      }
-
-      setTranscript(scoreData?.transcript ?? "");
-      setFeedback(scoreData?.feedback ?? "");
-      setStatus("Done!");
-    } catch (err: unknown) {
-      setStatus("Error: " + getErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
+      const data = await response.json().catch(() => null);
+      if (!response.ok) { setStatus("Score failed: " + (data?.error || `HTTP ${response.status}`)); return; }
+      setTranscript(data?.transcript ?? ""); setFeedback(data?.feedback ?? ""); setStatus("Analysis complete.");
+    } catch (error: unknown) { setStatus("Error: " + getErrorMessage(error)); }
+    finally { setLoading(false); }
   }
 
   async function askFollowup() {
-    if (!transcript || !feedback) {
-      setFollowupStatus("Run a score first so I have context.");
-      return;
-    }
-
-    if (!csrQuestion.trim()) {
-      setFollowupStatus("Type a question first.");
-      return;
-    }
-
-    setFollowupLoading(true);
-    setFollowupStatus("");
-    setFollowupAnswer("");
-
+    if (!transcript || !feedback) { setFollowupStatus("Run a score first so I have context."); return; }
+    if (!csrQuestion.trim()) { setFollowupStatus("Type a question first."); return; }
+    setFollowupLoading(true); setFollowupStatus("Sending question to Coach Denny..."); setFollowupAnswer("");
     try {
-      setFollowupStatus("Sending question to Coach Denny...");
-
-      const res = await fetch("/api/score-call", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          mode: "followup",
-          csrQuestion: csrQuestion.trim(),
-          transcript,
-          scoreOutput: feedback,
-        }),
+      const response = await fetch("/api/score-call", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mode: "followup", csrQuestion: csrQuestion.trim(), transcript, scoreOutput: feedback }),
       });
-
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        setFollowupStatus(
-          "Follow-up failed: " + (data?.error || `HTTP ${res.status}`)
-        );
-        return;
-      }
-
-      setFollowupAnswer(data?.answer ?? "");
-      setFollowupStatus("Done!");
-    } catch (err: unknown) {
-      setFollowupStatus("Error: " + getErrorMessage(err));
-    } finally {
-      setFollowupLoading(false);
-    }
+      const data = await response.json().catch(() => null);
+      if (!response.ok) { setFollowupStatus("Follow-up failed: " + (data?.error || `HTTP ${response.status}`)); return; }
+      setFollowupAnswer(data?.answer ?? ""); setFollowupStatus("");
+    } catch (error: unknown) { setFollowupStatus("Error: " + getErrorMessage(error)); }
+    finally { setFollowupLoading(false); }
   }
 
   return (
-    <DenShell
-      title="Let Coach Denny Listen"
-      subtitle="Upload a call and get transcript + coaching feedback"
-    >
-      <input
-        id="audioFile"
-        type="file"
-        accept="audio/*"
-        style={{ display: "none" }}
-        onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-      />
+    <DenShell title="Let Coach Denny Listen" subtitle="Turn calls into coaching insights" theme="listen">
+      <section className="listen-hero">
+        <div>
+          <p className="eyebrow">Call review & coaching</p>
+          <h1 className="display-title">Turn every call into <span>a coaching moment.</span></h1>
+          <p>Upload a customer call and Denny will highlight what worked—and what to improve.</p>
+        </div>
+        <Image className="listen-mascot" src="/brand/denny.png" alt="Coach Denny" width={500} height={500} priority />
+      </section>
 
-      <div
-        style={{
-          display: "flex",
-          gap: 10,
-          alignItems: "center",
-          flexWrap: "wrap",
-        }}
-      >
-        <label
-          htmlFor="audioFile"
-          className="den-link"
-          style={{ cursor: "pointer" }}
-        >
-          Choose audio file
-        </label>
+      <section className="upload-panel surface">
+        <div className="file-status">
+          <span className="play-disc" aria-hidden="true">▶</span>
+          <div><strong>{file ? file.name : "Choose a customer call"}</strong><span>{file ? "Ready for Coach Denny" : "Audio files supported"}</span></div>
+        </div>
+        <div className="listen-actions">
+          <input id="audioFile" type="file" accept="audio/*" hidden onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
+          <label htmlFor="audioFile" className="btn btn-teal">Choose Call</label>
+          <button className="btn btn-coral" disabled={loading || !file} onClick={uploadAndScore}>{loading ? "Working…" : "Upload + Get Feedback"}</button>
+        </div>
+      </section>
 
-        {file && (
-          <span style={{ fontSize: 14, opacity: 0.85 }}>
-            Selected: <strong>{file.name}</strong>
-          </span>
+      {status && <div className="notice" style={{ marginTop: 12 }}>{status}</div>}
+
+      <section className="insight-grid">
+        <article className="insight-card surface">
+          <h2>✓ What Went Well</h2>
+          <p>{feedback ? "Your complete coaching feedback is ready below." : "Denny will identify strong greetings, discovery questions, explanations, and next steps."}</p>
+        </article>
+        <article className="insight-card surface">
+          <h2>◆ Coaching Opportunities</h2>
+          <p>{feedback ? "Review the specific opportunities and recommended language below." : "Upload a call to uncover focused, practical ways to make the next conversation stronger."}</p>
+        </article>
+
+        {(transcript || feedback) && (
+          <article className="insight-card surface result-section">
+            {transcript && <><h2>Call Transcript</h2><div className="result-box"><pre className="output-pre">{transcript}</pre></div></>}
+            {feedback && <><h2 style={{ marginTop: 24 }}>Coaching Feedback</h2><div className="result-box"><pre className="output-pre">{feedback}</pre></div></>}
+
+            {feedback && <div className="followup-area">
+              <h2>Ask Coach Denny</h2>
+              <p>Ask a follow-up question about this call and Denny will use the transcript and feedback as context.</p>
+              <textarea className="chat-input" value={csrQuestion} onChange={(event) => setCsrQuestion(event.target.value)} placeholder="Example: How should I have handled the price moment without losing control?" />
+              <div><button className="btn btn-amber" disabled={followupLoading} onClick={askFollowup}>{followupLoading ? "Asking…" : "Ask Coach Denny"}</button></div>
+              {followupStatus && <div className="notice">{followupStatus}</div>}
+              {followupAnswer && <div className="result-box"><pre className="output-pre">{followupAnswer}</pre></div>}
+              <TalkToCoachDenny transcript={transcript} scoreOutput={feedback} />
+            </div>}
+          </article>
         )}
-      </div>
-
-      <div style={{ marginTop: 12 }}>
-        <button
-          disabled={loading}
-          onClick={uploadAndScore}
-          className="den-link"
-          style={{
-            cursor: loading ? "not-allowed" : "pointer",
-            opacity: loading ? 0.7 : 1,
-          }}
-        >
-          {loading ? "Working..." : "Upload + Get Feedback"}
-        </button>
-      </div>
-
-      {status && <p style={{ marginTop: 12 }}>{status}</p>}
-
-      {transcript && (
-        <>
-          <h3 style={{ marginTop: 18 }}>Transcript</h3>
-          <pre style={{ whiteSpace: "pre-wrap" }}>{transcript}</pre>
-        </>
-      )}
-
-      {feedback && (
-        <>
-          <h3 style={{ marginTop: 18 }}>Coaching Feedback</h3>
-          <pre style={{ whiteSpace: "pre-wrap" }}>{feedback}</pre>
-
-          <h3 style={{ marginTop: 18 }}>Ask Coach Denny</h3>
-
-          <p style={{ marginTop: 6, opacity: 0.85 }}>
-            Question about your call? Want to meet in the parking lot? Coach
-            Denny will answer any question you have.
-          </p>
-
-          <textarea
-            value={csrQuestion}
-            onChange={(e) => setCsrQuestion(e.target.value)}
-            placeholder="Example: How should I have handled the price moment without losing control?"
-            style={{
-              width: "100%",
-              minHeight: 90,
-              marginTop: 10,
-              padding: 10,
-              border: "1px solid #000",
-              borderRadius: 6,
-              fontSize: 14,
-            }}
-          />
-
-          <div style={{ marginTop: 10 }}>
-            <button
-              disabled={followupLoading}
-              onClick={askFollowup}
-              className="den-link"
-              style={{
-                cursor: followupLoading ? "not-allowed" : "pointer",
-                opacity: followupLoading ? 0.7 : 1,
-              }}
-            >
-              {followupLoading ? "Asking..." : "Ask Coach Denny"}
-            </button>
-          </div>
-
-          {followupStatus && <p style={{ marginTop: 10 }}>{followupStatus}</p>}
-
-          {followupAnswer && (
-            <>
-              <h3 style={{ marginTop: 14 }}>Coach Denny Answer</h3>
-              <pre style={{ whiteSpace: "pre-wrap" }}>{followupAnswer}</pre>
-            </>
-          )}
-
-          <TalkToCoachDenny transcript={transcript} scoreOutput={feedback} />
-        </>
-      )}
+      </section>
     </DenShell>
   );
 }
