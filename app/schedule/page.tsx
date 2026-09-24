@@ -1,12 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import Image from "next/image";
 import DenShell from "../components/DenShell";
 import salesZipDirectory from "../lib/salesZipDirectory.json";
 
 type ConversationMessage = { role: "user" | "assistant"; content: string };
 type ZipDirectory = Record<string, string[]>;
+type LocationPreview = {
+  city: string;
+  state: string;
+  zip: string;
+  inServiceArea: boolean;
+  latitude?: number;
+  longitude?: number;
+};
 const NEXT_OPTIONS_MESSAGE = "Next 3 Options";
 const SERVICE_ZIPS = salesZipDirectory as ZipDirectory;
 
@@ -23,6 +31,21 @@ function immediateZipReply(message: string) {
   return `${zip} is ${city}, ${state}, and it is in our service area.`;
 }
 
+function immediateZipPreview(message: string): LocationPreview | null {
+  const zip = message.match(/\b(\d{5})(?:-\d{4})?\b/)?.[1];
+  if (!zip) return null;
+  const location = SERVICE_ZIPS[zip];
+  if (!location) {
+    return { city: "Location", state: "", zip, inServiceArea: false };
+  }
+  return {
+    city: location[0],
+    state: location[1],
+    zip,
+    inServiceArea: true,
+  };
+}
+
 export default function SchedulePage() {
   const [input, setInput] = useState("");
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
@@ -30,10 +53,36 @@ export default function SchedulePage() {
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
   const [pendingZipReply, setPendingZipReply] = useState("");
+  const [locationPreview, setLocationPreview] = useState<LocationPreview | null>(null);
+  const [mapLoading, setMapLoading] = useState(false);
+  const previewRequestId = useRef(0);
   const hasAssistantReply = conversation.some((message) => message.role === "assistant");
 
   function errorMessage(error: unknown) {
     return error instanceof Error ? error.message : "Request failed";
+  }
+
+  async function loadLocationPreview(location: string, requestId: number) {
+    setMapLoading(true);
+    try {
+      const response = await fetch("/api/location-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ location }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (requestId !== previewRequestId.current || !response.ok) return;
+      setLocationPreview({
+        city: String(data.city || "Location"),
+        state: String(data.state || ""),
+        zip: String(data.zip || ""),
+        inServiceArea: data.inServiceArea === true,
+        latitude: Number(data.latitude),
+        longitude: Number(data.longitude),
+      });
+    } finally {
+      if (requestId === previewRequestId.current) setMapLoading(false);
+    }
   }
 
   async function submitMessage(messageText: string) {
@@ -42,13 +91,20 @@ export default function SchedulePage() {
     const userMessage: ConversationMessage = { role: "user", content: trimmedInput };
     const nextConversation = [...conversation, userMessage];
     const quickReply = conversation.length === 0 ? immediateZipReply(trimmedInput) : "";
+    const quickPreview = conversation.length === 0 ? immediateZipPreview(trimmedInput) : null;
     setConversation(nextConversation); setInput(""); setConsultantChoices([]);
     setPendingZipReply(quickReply);
+    if (conversation.length === 0) {
+      const requestId = previewRequestId.current + 1;
+      previewRequestId.current = requestId;
+      setLocationPreview(quickPreview);
+      void loadLocationPreview(trimmedInput, requestId);
+    }
     setStatus(quickReply ? "Finding the three best appointment options..." : "Checking territories, sales schedules, drive times, and routing rules..."); setLoading(true);
     try {
       const response = await fetch("/api/schedule", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: nextConversation }),
+        body: JSON.stringify({ messages: nextConversation, locationPreviewEnabled: true }),
       });
       const text = await response.text();
       let data: { reply?: string; error?: string; details?: string; consultantChoices?: unknown[] } = {};
@@ -64,7 +120,48 @@ export default function SchedulePage() {
   async function askDenny() { await submitMessage(input); }
   async function nextThreeOptions() { if (hasAssistantReply && !loading) await submitMessage(NEXT_OPTIONS_MESSAGE); }
   async function chooseConsultant(name: string) { await submitMessage(`Use ${name} for this location.`); }
-  function startNewSearch() { setConversation([]); setInput(""); setConsultantChoices([]); setPendingZipReply(""); setStatus(""); setLoading(false); }
+  function startNewSearch() {
+    previewRequestId.current += 1;
+    setConversation([]); setInput(""); setConsultantChoices([]); setPendingZipReply("");
+    setLocationPreview(null); setMapLoading(false); setStatus(""); setLoading(false);
+  }
+
+  function locationCard() {
+    if (!locationPreview) return null;
+    const hasCoordinates =
+      Number.isFinite(locationPreview.latitude) &&
+      Number.isFinite(locationPreview.longitude);
+    const mapSource = hasCoordinates
+      ? `/api/location-map?lat=${encodeURIComponent(String(locationPreview.latitude))}&lng=${encodeURIComponent(String(locationPreview.longitude))}`
+      : "";
+    const place = [locationPreview.city, locationPreview.state].filter(Boolean).join(", ");
+
+    return (
+      <section className="location-preview-card" aria-label="Customer location preview">
+        <div className="location-preview-copy">
+          <span className="location-preview-eyebrow">Customer location</span>
+          <h2>{place}</h2>
+          {locationPreview.zip && <p>ZIP {locationPreview.zip}</p>}
+          <strong className={locationPreview.inServiceArea ? "service-area-yes" : "service-area-no"}>
+            {locationPreview.inServiceArea ? "✓ In Service Area" : "Outside Service Area"}
+          </strong>
+          {loading && <small>Denny is checking live schedules and routes now…</small>}
+        </div>
+        <div className="location-map-wrap">
+          {mapSource ? (
+            // The image is proxied by our authenticated server route so the
+            // Google Maps key is never exposed to the browser.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={mapSource} alt={`Map centered on ${place}`} />
+          ) : (
+            <div className="location-map-loading">
+              {mapLoading ? "Loading map…" : "Map unavailable"}
+            </div>
+          )}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <DenShell title="Denny’s Smart Scheduler" subtitle="Find the best sales consultant, date, and time" theme="schedule">
@@ -102,12 +199,15 @@ export default function SchedulePage() {
 
           {conversation.length > 0 && <div className="conversation" aria-live="polite">
             {conversation.map((message, index) => (
-              <article key={`${message.role}-${index}`} className={`message message-${message.role}`}>
-                <strong>{message.role === "user" ? "CSR" : "Denny"}</strong>
-                <pre>{message.content}</pre>
-              </article>
+              <Fragment key={`${message.role}-${index}`}>
+                <article className={`message message-${message.role}`}>
+                  <strong>{message.role === "user" ? "CSR" : "Denny"}</strong>
+                  <pre>{message.content}</pre>
+                </article>
+                {index === 0 && locationCard()}
+              </Fragment>
             ))}
-            {pendingZipReply && (
+            {pendingZipReply && !locationPreview && (
               <article className="message message-assistant">
                 <strong>Denny</strong>
                 <pre>{pendingZipReply}</pre>

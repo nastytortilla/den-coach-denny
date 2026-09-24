@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
 import { connectServiceTitanMcp } from "@/lib/serviceTitanMcp";
+import { requestedConsultantFromConversation } from "@/app/lib/salesConsultantSelection";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -667,6 +668,11 @@ function formatNoOptionsReply(
   }
 
   const constraints = payload?.customerRequestedConstraints || {};
+  const requestedConsultant = String(
+    payload?.requestedConsultantName ||
+    payload?.territoryResolution?.requestedConsultantName ||
+    ""
+  ).trim();
   const constraintParts: string[] = [];
   if (Array.isArray(constraints.requestedDates) && constraints.requestedDates.length) {
     constraintParts.push(`the requested date ${constraints.requestedDates.join(", ")}`);
@@ -683,14 +689,15 @@ function formatNoOptionsReply(
 
   lines.push(
     constraintParts.length
-      ? `I couldn't find a valid appointment matching ${constraintParts.join(", ")}.`
-      : "I couldn't find a valid appointment in the search period."
+      ? `I couldn't find a valid appointment${requestedConsultant ? ` for ${requestedConsultant}` : ""} matching ${constraintParts.join(", ")}.`
+      : `I couldn't find a valid appointment${requestedConsultant ? ` for ${requestedConsultant}` : ""} in the search period.`
   );
 
   const rejected = Array.isArray(payload?.diagnostics?.sampleRejectedRouteCandidates)
     ? payload.diagnostics.sampleRejectedRouteCandidates
     : [];
   const eligibleConsultants = new Set<string>([
+    requestedConsultant,
     ...(Array.isArray(payload?.territoryResolution?.consultants)
       ? payload.territoryResolution.consultants
       : []),
@@ -1029,6 +1036,9 @@ export async function POST(req: Request) {
     const conversation =
       getConversationMessages(body);
 
+    const locationPreviewEnabled =
+      body?.locationPreviewEnabled === true;
+
     if (conversation.length === 0) {
       return NextResponse.json(
         {
@@ -1079,6 +1089,9 @@ export async function POST(req: Request) {
     const explanationFollowUp =
       isExplanationFollowUp(conversation);
 
+    const requestedConsultantName =
+      requestedConsultantFromConversation(conversation);
+
     const customerSchedulingConstraints =
       extractCustomerSchedulingConstraints(conversation);
 
@@ -1108,7 +1121,8 @@ export async function POST(req: Request) {
       !explanationFollowUp &&
       (
         zipWasEnteredThisTurn ||
-        nextThreeRequest
+        nextThreeRequest ||
+        requestedConsultantName
       )
     );
 
@@ -1118,6 +1132,9 @@ export async function POST(req: Request) {
           `${zipResolution.zip}, ${zipResolution.city}, ${zipResolution.stateAbbreviation}`,
         maxRecommendations: 3,
       };
+      if (requestedConsultantName) {
+        directArguments.requestedConsultantName = requestedConsultantName;
+      }
       const resolvedLatitude = Number(
         zipResolution.latitude
       );
@@ -1212,7 +1229,7 @@ export async function POST(req: Request) {
         ? formatConciseSchedulerReply(
             directPayload,
             zipResolution,
-            zipWasEnteredThisTurn
+            zipWasEnteredThisTurn && !locationPreviewEnabled
           )
         : null;
 
@@ -1226,7 +1243,7 @@ export async function POST(req: Request) {
         ? formatNoOptionsReply(
             directPayload,
             zipResolution,
-            zipWasEnteredThisTurn
+            zipWasEnteredThisTurn && !locationPreviewEnabled
           )
         : null;
 
@@ -1314,7 +1331,8 @@ INPUT RULES:
 - A ZIP code, city/state, or complete street address is valid for appointmentLocation.
 - A bare U.S. ZIP code is resolved server-side to its city, state, latitude, and longitude before Tool #50 runs. Tool #50's canonical ZIP territory map is authoritative.
 - When ZIP resolution is available, use the resolved ZIP + city + state as appointmentLocation. The server will also attach ZIP-centroid coordinates for routing. Do not invent a different city, state, latitude, or longitude, and do not override Tool #50's canonical territory result with an external ZIP service or city alias.
-- Never ask the CSR to select a sales consultant and never pass consultantNames. Tool #50 automatically chooses the best qualified consultant for each recommended date.
+- Never pass consultantNames. Tool #50 automatically chooses the best qualified consultant unless the CSR explicitly asks to try one named eligible consultant.
+- When the CSR explicitly says phrases such as "What about AJ?", "Can we use Moises?", "Try Eli", or "Use Alex", pass that canonical person as requestedConsultantName. This is a new live search restricted to that consultant, but every territory, proximity, calendar, blocker, duration, route, and homeward rule still applies. If that consultant has no valid option, say so; never silently fall back to another consultant.
 - ZIP ownership comes from the Den Coach Zip Assignments workbook. A non-owner may qualify only from an actual same-day prior customer appointment within 40 driving minutes; Tool #50 compares qualifying routes and chooses the closest consultant for that date.
 - Nick Rendon is not eligible for sales scheduling.
 - Mike Conarton is the Fresno/Bakersfield primary only during a live Fresno/Bakersfield coverage week; otherwise he remains in Arizona/Las Vegas.
@@ -1334,7 +1352,7 @@ FOLLOW-UP RULES:
 - If the user says "Next 3 Options", asks for "three more", "more dates", "next options", or otherwise wants additional choices, call recommend_sales_schedule again with maxRecommendations set to 3.
 - Populate excludeOptions with EVERY appointment option already presented earlier in the conversation, using its date, local start time, and consultant when available.
 - Do not repeat an earlier option when the user asked for additional choices.
-- "Next 3 Options" means the customer declined the currently displayed choices. Keep the same location and let Tool #50 automatically reassess all qualified consultants.
+- "Next 3 Options" means the customer declined the currently displayed choices. Keep the same location. If the CSR most recently requested a specific consultant, keep requestedConsultantName restricted to that consultant; otherwise let Tool #50 automatically reassess all qualified consultants.
 - For the exact "Next 3 Options" button request, start the new search on the calendar day AFTER the latest appointment date already displayed. This intentionally returns choices on later dates instead of sliding the same day's option by 15 minutes.
 
 DEFAULT OUTPUT FORMAT:
@@ -1587,6 +1605,11 @@ Once recommend_sales_schedule has returned successfully during the current reque
         );
 
         delete toolArguments.consultantNames;
+        if (requestedConsultantName) {
+          toolArguments.requestedConsultantName = requestedConsultantName;
+        } else {
+          delete toolArguments.requestedConsultantName;
+        }
 
         const toolResult =
           await mcpClient.callTool(
@@ -1681,7 +1704,7 @@ Once recommend_sales_schedule has returned successfully during the current reque
             formatConciseSchedulerReply(
               schedulerPayload,
               zipResolution,
-              zipWasEnteredThisTurn
+              zipWasEnteredThisTurn && !locationPreviewEnabled
             );
 
           if (conciseReply) {

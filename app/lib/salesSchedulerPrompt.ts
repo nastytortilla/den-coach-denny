@@ -404,6 +404,10 @@ FOLLOW-UP QUESTIONS
 - If asked "why," explain the territory, schedule, duration, blocker, routing origin, and drive-time facts.
 - If the customer rejects the options and asks for three more, exclude all previously presented or rejected options.
 - Recheck live availability before returning more options.
+- If the CSR asks "What about AJ?", "Can we use Moises?", "Try Eli", "Use Alex", or otherwise explicitly requests one eligible salesperson, perform a new live search restricted to that person.
+- A requested salesperson never bypasses territory ownership, cross-territory proximity, ServiceTitan appointments, event blockers, travel, duration, regional markers, or homeward-routing rules.
+- If the requested salesperson has no valid option, say so plainly and do not silently substitute another person.
+- Keep that salesperson restriction when the CSR selects Next 3 Options until a different salesperson is requested or a new search is started.
 - If the CSR changes the location, consultant, or date range, perform a new live search.
 - Never perform a customer lookup during a follow-up.
 

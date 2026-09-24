@@ -160,6 +160,19 @@ a { color: inherit; }
 .message-assistant { background: linear-gradient(135deg, #fff, #f4fbfa); border-left: 5px solid var(--teal); }
 .message strong { display: block; margin-bottom: 8px; font-family: var(--display); text-transform: uppercase; font-size: 21px; }
 .message pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; line-height: 1.7; }
+.location-preview-card { display: grid; grid-template-columns: minmax(240px, .72fr) minmax(360px, 1.28fr); overflow: hidden; border: 1px solid var(--line); border-left: 5px solid var(--teal); border-radius: 15px; background: #fff; box-shadow: 0 8px 22px rgba(4,48,72,.08); }
+.location-preview-copy { display: flex; flex-direction: column; justify-content: center; gap: 7px; padding: 24px; background: linear-gradient(145deg, #f7fcfc, #edf9f8); }
+.location-preview-eyebrow { color: var(--teal-dark); font-size: 12px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+.location-preview-copy h2 { margin: 0; color: var(--navy); font-family: var(--display); font-size: clamp(29px, 3vw, 42px); line-height: 1; text-transform: uppercase; }
+.location-preview-copy p { margin: 0; color: var(--muted); font-weight: 750; }
+.location-preview-copy strong { margin-top: 5px; font-size: 17px; }
+.location-preview-copy small { margin-top: 9px; color: var(--muted); line-height: 1.4; }
+.service-area-yes { color: var(--success); }
+.service-area-no { color: var(--coral); }
+.location-map-wrap { min-height: 230px; background: #e7eef0; }
+.location-map-wrap img { display: block; width: 100%; height: 100%; min-height: 230px; object-fit: cover; }
+.location-map-loading { display: grid; min-height: 230px; place-items: center; color: var(--muted); font-weight: 800; background: linear-gradient(110deg, #edf2f3 25%, #f8fbfb 45%, #edf2f3 65%); background-size: 220% 100%; animation: map-shimmer 1.4s linear infinite; }
+@keyframes map-shimmer { to { background-position-x: -220%; } }
 .schedule-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
 .consultant-box { margin-top: 16px; padding: 18px; border: 2px solid var(--amber); border-radius: 15px; background: #fff9e8; }
 .consultant-box p { margin: 0 0 10px; font-weight: 800; }
@@ -214,6 +227,8 @@ a { color: inherit; }
   .insight-grid { grid-template-columns: 1fr; }
   .schedule-workspace { margin-top: 8px; }
   .schedule-panel { padding: 18px; }
+  .location-preview-card { grid-template-columns: 1fr; }
+  .location-map-wrap, .location-map-wrap img, .location-map-loading { min-height: 210px; }
   .route-aside { grid-template-columns: 1fr; }
   .route-note { grid-column: auto; }
 }
