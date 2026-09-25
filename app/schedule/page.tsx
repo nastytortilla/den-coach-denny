@@ -57,6 +57,12 @@ export default function SchedulePage() {
   const [mapLoading, setMapLoading] = useState(false);
   const previewRequestId = useRef(0);
   const hasAssistantReply = conversation.some((message) => message.role === "assistant");
+  const displayedConversation = conversation
+    .map((message, originalIndex) => ({ message, originalIndex }))
+    .reverse();
+  const latestAssistantIndex = conversation
+    .map((message) => message.role)
+    .lastIndexOf("assistant");
 
   function errorMessage(error: unknown) {
     return error instanceof Error ? error.message : "Request failed";
@@ -198,13 +204,16 @@ export default function SchedulePage() {
           {status && <div className="notice" style={{ marginTop: 16 }}>{status}</div>}
 
           {conversation.length > 0 && <div className="conversation" aria-live="polite">
-            {conversation.map((message, index) => (
-              <Fragment key={`${message.role}-${index}`}>
+            {displayedConversation.map(({ message, originalIndex }, displayIndex) => (
+              <Fragment key={`${message.role}-${originalIndex}`}>
                 <article className={`message message-${message.role}`}>
                   <strong>{message.role === "user" ? "CSR" : "Denny"}</strong>
                   <pre>{message.content}</pre>
                 </article>
-                {index === 0 && locationCard()}
+                {(
+                  (latestAssistantIndex >= 0 && originalIndex === latestAssistantIndex) ||
+                  (latestAssistantIndex < 0 && displayIndex === 0)
+                ) && locationCard()}
               </Fragment>
             ))}
             {pendingZipReply && !locationPreview && (
