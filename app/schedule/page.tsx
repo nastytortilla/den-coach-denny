@@ -60,9 +60,6 @@ export default function SchedulePage() {
   const displayedConversation = conversation
     .map((message, originalIndex) => ({ message, originalIndex }))
     .reverse();
-  const latestAssistantIndex = conversation
-    .map((message) => message.role)
-    .lastIndexOf("assistant");
 
   function errorMessage(error: unknown) {
     return error instanceof Error ? error.message : "Request failed";
@@ -96,11 +93,13 @@ export default function SchedulePage() {
     if (!trimmedInput || loading) return;
     const userMessage: ConversationMessage = { role: "user", content: trimmedInput };
     const nextConversation = [...conversation, userMessage];
-    const quickReply = conversation.length === 0 ? immediateZipReply(trimmedInput) : "";
-    const quickPreview = conversation.length === 0 ? immediateZipPreview(trimmedInput) : null;
+    const includesZip = /\b\d{5}(?:-\d{4})?\b/.test(trimmedInput);
+    const shouldRefreshLocation = conversation.length === 0 || includesZip;
+    const quickReply = shouldRefreshLocation ? immediateZipReply(trimmedInput) : "";
+    const quickPreview = shouldRefreshLocation ? immediateZipPreview(trimmedInput) : null;
     setConversation(nextConversation); setInput(""); setConsultantChoices([]);
     setPendingZipReply(quickReply);
-    if (conversation.length === 0) {
+    if (shouldRefreshLocation) {
       const requestId = previewRequestId.current + 1;
       previewRequestId.current = requestId;
       setLocationPreview(quickPreview);
@@ -204,16 +203,13 @@ export default function SchedulePage() {
           {status && <div className="notice" style={{ marginTop: 16 }}>{status}</div>}
 
           {conversation.length > 0 && <div className="conversation" aria-live="polite">
-            {displayedConversation.map(({ message, originalIndex }, displayIndex) => (
+            {locationCard()}
+            {displayedConversation.map(({ message, originalIndex }) => (
               <Fragment key={`${message.role}-${originalIndex}`}>
                 <article className={`message message-${message.role}`}>
                   <strong>{message.role === "user" ? "CSR" : "Denny"}</strong>
                   <pre>{message.content}</pre>
                 </article>
-                {(
-                  (latestAssistantIndex >= 0 && originalIndex === latestAssistantIndex) ||
-                  (latestAssistantIndex < 0 && displayIndex === 0)
-                ) && locationCard()}
               </Fragment>
             ))}
             {pendingZipReply && !locationPreview && (
